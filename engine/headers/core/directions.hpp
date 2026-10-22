@@ -21,31 +21,31 @@ struct DirectionOffset {
     int file;
 };
 
-inline constexpr std::array<DirectionOffset, 2> whitePawnAttackDirections = {{
+inline constexpr std::array<DirectionOffset, 2> WhitePawnAttackDirections = {{
     { 1, -1 },
     { 1,  1 }
 }};
 
-inline constexpr std::array<DirectionOffset, 2> blackPawnAttackDirections = {{
+inline constexpr std::array<DirectionOffset, 2> BlackPawnAttackDirections = {{
     { -1, -1 },
     { -1,  1 }
 }};
 
-inline constexpr std::array<DirectionOffset, 4> rookDirections = {{
+inline constexpr std::array<DirectionOffset, 4> RookDirections = {{
     {  1,  0 },
     { -1,  0 },
     {  0,  1 },
     {  0, -1 }
 }};
 
-inline constexpr std::array<DirectionOffset, 4> bishopDirections = {{
+inline constexpr std::array<DirectionOffset, 4> BishopDirections = {{
     {  1,  1 },
     {  1, -1 },
     { -1,  1 },
     { -1, -1 }
 }};
 
-inline constexpr std::array<DirectionOffset, 8> knightDirections = {{
+inline constexpr std::array<DirectionOffset, 8> KnightDirections = {{
     {  2,  1 },
     { -2,  1 },
     {  2, -1 },
@@ -56,7 +56,7 @@ inline constexpr std::array<DirectionOffset, 8> knightDirections = {{
     { -1, -2 }
 }};
 
-inline constexpr std::array<DirectionOffset, 8> kingDirections = {{
+inline constexpr std::array<DirectionOffset, 8> KingDirections = {{
     {  1,  1 },
     { -1,  1 },
     {  1, -1 },

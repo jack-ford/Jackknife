@@ -143,7 +143,7 @@ bool can_select(const Board& board, square_t square) {
         return false;
 
     piece_t piece = board.get_square(square);
-    return !Piece::isEmpty(piece) && Piece::color(piece) == board.move_colour();
+    return !Piece::is_empty(piece) && Piece::color(piece) == board.move_colour();
 }
 
 bool is_capture(const Board& board, move_t move) {
@@ -151,7 +151,7 @@ bool is_capture(const Board& board, move_t move) {
         return true;
     if (Move::type(move) == Move::Type::Castling)
         return false;
-    return !Piece::isEmpty(board.get_square(Move::to(move)));
+    return !Piece::is_empty(board.get_square(Move::to(move)));
 }
 
 SDL_Color square_color(square_t square, square_t selected,
@@ -233,7 +233,7 @@ void draw_board(SDL_Renderer* renderer, const SpriteSheet& sprites,
             square_t square = Square::index(rank, file);
             piece_t piece = board.get_square(square);
 
-            if (Piece::isEmpty(piece) || (dragging && square == selected))
+            if (Piece::is_empty(piece) || (dragging && square == selected))
                 continue;
 
             Position position = square_position(square);

@@ -18,9 +18,31 @@
 
 namespace chess {
 
+namespace CastlingRights {
+    inline constexpr uint8_t WhiteKingside = 1;
+    inline constexpr uint8_t WhiteQueenside = 2;
+    inline constexpr uint8_t BlackKingside = 4;
+    inline constexpr uint8_t BlackQueenside = 8;
+
+    constexpr uint8_t kingside(PieceColor color) {
+        return color == PieceColor::White ? WhiteKingside : BlackKingside;
+    }
+
+    constexpr uint8_t queenside(PieceColor color) {
+        return color == PieceColor::White ? WhiteQueenside : BlackQueenside;
+    }
+
+    constexpr uint8_t both(PieceColor color) {
+        return kingside(color) | queenside(color);
+    }
+}
+
+
 struct GameState {
     PieceType capturedPieceType = PieceType::None;
+    // Raw FEN target; only legally capturable targets contribute to zobristKey.
     square_t enPassantSquare = Square::None;
+    bool enPassantHashed = false;
     uint8_t castlingRights = 0; // White kingside/queenside, black kingside/queenside.
     int fiftyMoveCounter = 0;
     uint64_t zobristKey = 0;
@@ -40,13 +62,14 @@ struct HistoryEntry {
 class Board final {
     public:
         // Black = 0, White = 1.
-        static constexpr int whiteIndex = static_cast<int>(PieceColor::White);
-        static constexpr int blackIndex = static_cast<int>(PieceColor::Black);
+        static constexpr int WhiteIndex = static_cast<int>(PieceColor::White);
+        static constexpr int BlackIndex = static_cast<int>(PieceColor::Black);
 
         // Construct the standard starting position.
         Board();
-        Board(std::string_view fen);
+        explicit Board(std::string_view fen);
 
+        // Requires a legal move. Search moves enter repetition history, but not game moves.
         void make_move(move_t move, bool inSearch = false);
         void unmake_move(move_t move, bool inSearch = false);
         void unmake_move();
@@ -57,11 +80,13 @@ class Board final {
         bool calculate_in_check_state() const;
 
         void load_start_position();
+        // Rejects invalid piece/king counts, adjacent kings, back-rank pawns, and invalid EP geometry.
+        // Rejected loads leave the board unchanged; historical reachability is not checked.
         void load_position(std::string_view fen);
         void load_position(const FenUtility::PositionInfo& positionInfo);
 
         // Result is relative to the side to move. Claimable draws are treated as claimed.
-        std::pair<GameResult, GameResultReason> isGameOver() const;
+        std::pair<GameResult, GameResultReason> is_game_over() const;
 
         piece_t get_square(square_t square) const;
         const std::array<piece_t, Square::Count>& squares() const;
@@ -75,6 +100,7 @@ class Board final {
         bitboard_t enemy_diagonal_sliders() const;
         int total_piece_count_without_pawns_and_kings() const;
 
+        // Views are valid until mutation; piece-list order is unspecified.
         std::span<const square_t> rooks(PieceColor color) const;
         std::span<const square_t> bishops(PieceColor color) const;
         std::span<const square_t> queens(PieceColor color) const;
@@ -88,8 +114,12 @@ class Board final {
         int opponent_colour_index() const;
         int ply_count() const;
         int fifty_move_counter() const;
+        // Canonical position key: en passant is hashed only when a legal capture exists.
+        // Not a Polyglot book key when the only candidate pawn is pinned.
         uint64_t zobrist_key() const;
         const GameState& current_game_state() const;
+        // Active real/search positions since the last irreversible or null move.
+        // Null positions themselves are excluded.
         std::span<const uint64_t> repetition_position_history() const;
         std::span<const move_t> all_game_moves() const;
         std::string current_fen() const;
@@ -99,8 +129,11 @@ class Board final {
         friend bool FenUtility::en_passant_can_be_captured(const Board& board);
 
     private:
-    
+
+        explicit Board(std::nullptr_t);
         void initialize();
+        void load_validated_position(const FenUtility::PositionInfo& positionInfo);
+        void update_en_passant_hash();
         void place_piece(piece_t piece, square_t square);
         void remove_piece(piece_t piece, square_t square);
         void move_piece(piece_t piece, square_t startSquare, square_t targetSquare);
@@ -119,7 +152,10 @@ class Board final {
         bitboard_t m_enemyOrthogonalSliders = 0;
         bitboard_t m_enemyDiagonalSliders = 0;
         int m_totalPieceCountWithoutPawnsAndKings = 0;
-        std::array<std::vector<square_t>, 14> m_allPieceLists;
+        // At most 16 pieces of either color in a structurally valid position.
+        std::array<std::array<square_t, 16>, 14> m_allPieceLists {};
+        std::array<uint8_t, 14> m_pieceListCounts {};
+        std::array<uint8_t, Square::Count> m_pieceListIndices {};
 
         bool m_isWhiteToMove = true;
         int m_plyCount = 0;

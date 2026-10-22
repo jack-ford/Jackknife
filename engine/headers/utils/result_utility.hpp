@@ -10,18 +10,18 @@ enum class GameResult { Win, Lose, Draw, None };
 enum class GameResultReason {
     Checkmate,
     Stalemate,
-    Insufficient_Material,
-    Fifty_Move_Rule,
-    Threefold_Repetition,
+    InsufficientMaterial,
+    FiftyMoveRule,
+    ThreefoldRepetition,
     None
 };
 
 namespace GameResultUtility {
 
-bool isRepetition(const Board& board, int count = 2);
-bool isHalfMoveDraw(const Board& board);
-bool isInsufficientMaterial(const Board& board);
-bool isMate(const MoveList& legalMoves, bool inCheck);
+bool is_repetition(const Board& board, int count = 2);
+bool is_half_move_draw(const Board& board);
+bool is_insufficient_material(const Board& board);
+bool is_mate(const MoveList& legalMoves, bool inCheck);
 
 }
 

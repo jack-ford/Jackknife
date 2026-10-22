@@ -17,25 +17,25 @@ namespace Bitboard {
 
     template <Direction direction>
     constexpr bitboard_t shift(bitboard_t bitboard) {
-        constexpr bitboard_t fileAMask = 0x0101010101010101ULL;
-        constexpr bitboard_t fileHMask = 0x8080808080808080ULL;
+        constexpr bitboard_t FileAMask = 0x0101010101010101ULL;
+        constexpr bitboard_t FileHMask = 0x8080808080808080ULL;
 
         if constexpr (direction == Direction::North)
             return bitboard << 8;
         else if constexpr (direction == Direction::South)
             return bitboard >> 8;
         else if constexpr (direction == Direction::NorthWest)
-            return (bitboard & ~fileAMask) << 7;
+            return (bitboard & ~FileAMask) << 7;
         else if constexpr (direction == Direction::West)
-            return (bitboard & ~fileAMask) >> 1;
+            return (bitboard & ~FileAMask) >> 1;
         else if constexpr (direction == Direction::SouthWest)
-            return (bitboard & ~fileAMask) >> 9;
+            return (bitboard & ~FileAMask) >> 9;
         else if constexpr (direction == Direction::NorthEast)
-            return (bitboard & ~fileHMask) << 9;
+            return (bitboard & ~FileHMask) << 9;
         else if constexpr (direction == Direction::East)
-            return (bitboard & ~fileHMask) << 1;
+            return (bitboard & ~FileHMask) << 1;
         else if constexpr (direction == Direction::SouthEast)
-            return (bitboard & ~fileHMask) >> 7;
+            return (bitboard & ~FileHMask) >> 7;
         else
             return 0;
     }

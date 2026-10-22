@@ -9,8 +9,8 @@
 
 namespace chess::FenUtility {
 
-PositionInfo::PositionInfo(std::string_view fen) : m_fen(fen) {
-    std::istringstream input(m_fen);
+PositionInfo::PositionInfo(std::string_view fenText) : fen(fenText) {
+    std::istringstream input(fen);
 
     std::array<std::string, 6> sections;
     int sectionCount = 0;
@@ -40,7 +40,7 @@ PositionInfo::PositionInfo(std::string_view fen) : m_fen(fen) {
         } else {
             if (file >= 8)
                 throw std::invalid_argument("FEN rank exceeds eight squares");
-            m_squares[Square::index(rank, file++)] = Piece::create(symbol);
+            squares[Square::index(rank, file++)] = Piece::create(symbol);
         }
     }
     if (rank != 0 || file != 8)
@@ -49,16 +49,16 @@ PositionInfo::PositionInfo(std::string_view fen) : m_fen(fen) {
     if (sections[1] != "w" && sections[1] != "b")
         throw std::invalid_argument("Invalid FEN side to move");
 
-    m_whiteToMove = sections[1] == "w";
+    whiteToMove = sections[1] == "w";
 
     if (sections[2] != "-") {
         for (char symbol : sections[2]) {
             bool* right = nullptr;
             switch (symbol) {
-                case 'K': right = &m_whiteCastleKingside; break;
-                case 'Q': right = &m_whiteCastleQueenside; break;
-                case 'k': right = &m_blackCastleKingside; break;
-                case 'q': right = &m_blackCastleQueenside; break;
+                case 'K': right = &whiteCastleKingside; break;
+                case 'Q': right = &whiteCastleQueenside; break;
+                case 'k': right = &blackCastleKingside; break;
+                case 'q': right = &blackCastleQueenside; break;
                 default: throw std::invalid_argument("Invalid FEN castling rights");
             }
             if (*right)
@@ -69,10 +69,10 @@ PositionInfo::PositionInfo(std::string_view fen) : m_fen(fen) {
     }
 
     if (sectionCount > 3 && sections[3] != "-") {
-        if (!Square::is_valid_string(sections[3]) || sections[3][1] != (m_whiteToMove ? '6' : '3'))
+        if (!Square::is_valid_string(sections[3]) || sections[3][1] != (whiteToMove ? '6' : '3'))
             throw std::invalid_argument("Invalid FEN en-passant square");
 
-        m_epFile = sections[3][0] - 'a' + 1;
+        epFile = sections[3][0] - 'a' + 1;
     }
 
     for (int index = 4; index < sectionCount; index++) {
@@ -88,9 +88,9 @@ PositionInfo::PositionInfo(std::string_view fen) : m_fen(fen) {
             value < minimum || value > maximum)
             throw std::invalid_argument("Invalid FEN move counter");
         if (index == 4)
-            m_fiftyMovePlyCount = value;
+            fiftyMovePlyCount = value;
         else
-            m_moveCount = value;
+            moveCount = value;
     }
 }
 
@@ -98,7 +98,7 @@ PositionInfo position_from_fen(std::string_view fen) {
     return PositionInfo(fen);
 }
 
-std::string current_fen(const Board& board, bool alwaysIncludeEPSquare) {
+std::string current_fen(const Board& board, bool alwaysIncludeEpSquare) {
     std::string fen;
     fen.reserve(90);
 
@@ -106,7 +106,7 @@ std::string current_fen(const Board& board, bool alwaysIncludeEPSquare) {
         int numEmptyFiles = 0;
         for (int file = 0; file < 8; file++) {
             piece_t piece = board.get_square(Square::index(rank, file));
-            if (Piece::isEmpty(piece)) {
+            if (Piece::is_empty(piece)) {
                 numEmptyFiles++;
             } else {
                 if (numEmptyFiles != 0) {
@@ -135,7 +135,7 @@ std::string current_fen(const Board& board, bool alwaysIncludeEPSquare) {
     fen += ' ';
 
     if (state.enPassantSquare != Square::None &&
-        (alwaysIncludeEPSquare || en_passant_can_be_captured(board)))
+        (alwaysIncludeEpSquare || en_passant_can_be_captured(board)))
         fen += Square::to_string(state.enPassantSquare);
     else
         fen += '-';
@@ -159,8 +159,8 @@ std::string flip_fen(std::string_view fen) {
         int numEmptyFiles = 0;
 
         for (int file = 0; file < 8; file++) {
-            piece_t piece = position.m_squares[Square::index(rank, file)];
-            if (Piece::isEmpty(piece)) {
+            piece_t piece = position.squares[Square::index(rank, file)];
+            if (Piece::is_empty(piece)) {
                 numEmptyFiles++;
             } else {
                 if (numEmptyFiles != 0) {
@@ -177,24 +177,24 @@ std::string flip_fen(std::string_view fen) {
         if (rank != 7)
             flippedFen += '/';
     }
-    flippedFen += position.m_whiteToMove ? " b " : " w ";
-    
+    flippedFen += position.whiteToMove ? " b " : " w ";
+
     std::string castlingRights;
-    if (position.m_blackCastleKingside) castlingRights += 'K';
-    if (position.m_blackCastleQueenside) castlingRights += 'Q';
-    if (position.m_whiteCastleKingside) castlingRights += 'k';
-    if (position.m_whiteCastleQueenside) castlingRights += 'q';
+    if (position.blackCastleKingside) castlingRights += 'K';
+    if (position.blackCastleQueenside) castlingRights += 'Q';
+    if (position.whiteCastleKingside) castlingRights += 'k';
+    if (position.whiteCastleQueenside) castlingRights += 'q';
     flippedFen += castlingRights.empty() ? "-" : castlingRights;
 
     flippedFen += ' ';
 
-    if (position.m_epFile != 0)
-        flippedFen += Square::to_string(Square::index(position.m_whiteToMove ? 2 : 5, position.m_epFile - 1));
+    if (position.epFile != 0)
+        flippedFen += Square::to_string(Square::index(position.whiteToMove ? 2 : 5, position.epFile - 1));
     else
         flippedFen += '-';
 
-    flippedFen += " " + std::to_string(position.m_fiftyMovePlyCount);
-    flippedFen += " " + std::to_string(position.m_moveCount);
+    flippedFen += " " + std::to_string(position.fiftyMovePlyCount);
+    flippedFen += " " + std::to_string(position.moveCount);
 
     return flippedFen;
 }

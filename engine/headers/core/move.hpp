@@ -19,7 +19,7 @@ namespace Move {
     template <Type type = Type::Normal>
     constexpr move_t create(square_t from, square_t to, PieceType promotion = PieceType::Knight) {
         move_t promotionValue = static_cast<move_t>(promotion) - static_cast<move_t>(PieceType::Knight);
-        return (static_cast<move_t>(type) << 14) | (promotionValue << 12) 
+        return (static_cast<move_t>(type) << 14) | (promotionValue << 12)
             | (static_cast<move_t>(from) << 6) | static_cast<move_t>(to);
 
     }
@@ -43,5 +43,5 @@ namespace Move {
     }
 
 }
-    
+
 }

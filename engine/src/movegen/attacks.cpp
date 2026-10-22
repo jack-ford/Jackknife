@@ -32,7 +32,7 @@ constexpr leaper_attack_table_t Attacks::create_knight_attack_table() {
     for (int square = 0; square < Square::Count; ++square) {
         table[square] = create_leaper_attacks(
             static_cast<square_t>(square),
-            knightDirections
+            KnightDirections
         );
     }
 
@@ -45,7 +45,7 @@ constexpr leaper_attack_table_t Attacks::create_king_attack_table() {
     for (int square = 0; square < Square::Count; ++square) {
         table[square] = create_leaper_attacks(
             static_cast<square_t>(square),
-            kingDirections
+            KingDirections
         );
     }
 
@@ -58,9 +58,9 @@ constexpr pawn_attack_table_t Attacks::create_pawn_attack_table() {
     for (int square = 0; square < Square::Count; ++square) {
         square_t index = static_cast<square_t>(square);
 
-        table[square][color_index(PieceColor::White)] = create_leaper_attacks(index, whitePawnAttackDirections);
+        table[square][color_index(PieceColor::White)] = create_leaper_attacks(index, WhitePawnAttackDirections);
 
-        table[square][color_index(PieceColor::Black)] = create_leaper_attacks(index, blackPawnAttackDirections);
+        table[square][color_index(PieceColor::Black)] = create_leaper_attacks(index, BlackPawnAttackDirections);
     }
 
     return table;
@@ -97,16 +97,16 @@ constexpr distance_table_t Attacks::create_king_distance_table() {
     return table;
 }
 
-const leaper_attack_table_t Attacks::knightAttacks = create_knight_attack_table();
-const leaper_attack_table_t Attacks::kingAttacks = create_king_attack_table();
-const pawn_attack_table_t Attacks::pawnAttacks = create_pawn_attack_table();
+const leaper_attack_table_t Attacks::KnightAttacks = create_knight_attack_table();
+const leaper_attack_table_t Attacks::KingAttacks = create_king_attack_table();
+const pawn_attack_table_t Attacks::PawnAttacks = create_pawn_attack_table();
 
-const distance_table_t Attacks::orthogonalDistance = create_orthogonal_distance_table();
-const distance_table_t Attacks::kingDistance = create_king_distance_table();
+const distance_table_t Attacks::OrthogonalDistance = create_orthogonal_distance_table();
+const distance_table_t Attacks::KingDistance = create_king_distance_table();
 
 bitboard_t Attacks::get_pawn_attacks(square_t square, PieceColor color) {
     assert(Square::is_valid(square));
-    return pawnAttacks[square][color_index(color)];
+    return PawnAttacks[square][color_index(color)];
 }
 
 bitboard_t Attacks::get_left_pawn_attacks(bitboard_t pawns, PieceColor color) {
@@ -125,7 +125,7 @@ bitboard_t Attacks::get_pawn_attacks(bitboard_t pawns, PieceColor color) {
 
 bitboard_t Attacks::get_knight_attacks(square_t square) {
     assert(Square::is_valid(square));
-    return knightAttacks[square];
+    return KnightAttacks[square];
 }
 
 bitboard_t Attacks::get_bishop_attacks(square_t square, bitboard_t occupied) {
@@ -145,7 +145,7 @@ bitboard_t Attacks::get_queen_attacks(square_t square, bitboard_t occupied) {
 
 bitboard_t Attacks::get_king_attacks(square_t square) {
     assert(Square::is_valid(square));
-    return kingAttacks[square];
+    return KingAttacks[square];
 }
 
 }

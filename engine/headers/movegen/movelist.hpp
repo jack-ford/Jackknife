@@ -8,14 +8,14 @@
 
 namespace chess {
 
-constexpr int MAX_MOVES = 256;
+constexpr int MaxMoves = 256;
 
 struct MoveList {
-    std::array<move_t, MAX_MOVES> moves;
+    std::array<move_t, MaxMoves> moves;
     int count = 0;
 
     constexpr void add(move_t move) {
-        assert(count < MAX_MOVES);
+        assert(count < MaxMoves);
         moves[count++] = move;
     }
 

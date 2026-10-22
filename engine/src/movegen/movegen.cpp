@@ -36,11 +36,11 @@ constexpr MoveGenerator::between_table_t MoveGenerator::create_squares_between()
     return table;
 }
 
-const MoveGenerator::between_table_t MoveGenerator::m_squaresBetween = create_squares_between();
+const MoveGenerator::between_table_t MoveGenerator::SquaresBetween = create_squares_between();
 
 bitboard_t MoveGenerator::squares_between(square_t startSquare, square_t targetSquare) {
     assert(Square::is_valid(startSquare) && Square::is_valid(targetSquare));
-    return m_squaresBetween[startSquare][targetSquare];
+    return SquaresBetween[startSquare][targetSquare];
 }
 
 MoveList MoveGenerator::generate_moves(const Board& board, GenerationMode mode, uint8_t pieceMask) {
@@ -68,9 +68,12 @@ bool MoveGenerator::has_legal_moves(const Board& board, GenerationMode mode, uin
 
 bool MoveGenerator::is_legal(const Board& board, move_t move) {
     // Legality is independent of an optional promotion selection for search.
-    MoveGenerator generator;
-    MoveList moves = generator.generate_moves(board);
     initialize(board, GenerationMode::All, false);
+    MoveList moves;
+    PromotionMode savedMode = m_promotionMode;
+    m_promotionMode = PromotionMode::All;
+    generate_all_moves(moves, AllPieces);
+    m_promotionMode = savedMode;
     return std::find(moves.begin(), moves.end(), move) != moves.end();
 }
 
@@ -99,7 +102,7 @@ void MoveGenerator::initialize(const Board& board, GenerationMode mode, bool one
     m_board = &board;
     m_generationMode = mode;
     m_oneMoveOnly = oneMoveOnly;
-    
+
     m_friendlyColour = board.move_colour();
     m_opponentColour = board.opponent_colour();
 
@@ -114,7 +117,7 @@ void MoveGenerator::initialize(const Board& board, GenerationMode mode, bool one
         mode == GenerationMode::QuietOnly ? ~m_allPieces : ~m_friendlyPieces;
 
     m_moveMask &= ~enemy_piece_board(PieceType::King);
-    
+
     calculate_attack_data();
 }
 
@@ -218,7 +221,7 @@ void MoveGenerator::generate_castling_moves(MoveList& moves) {
     for (bool kingside : { true, false }) {
         if (!(kingside ? state.has_kingside_castle_right(m_friendlyColour) :
             state.has_queenside_castle_right(m_friendlyColour))) continue;
-            
+
         square_t rookSquare = Square::relative_square(kingside ? Square::H1 : Square::A1, m_friendlyColour);
         if (m_board->get_square(rookSquare) != Piece::create(PieceType::Rook, m_friendlyColour)) continue;
 
@@ -314,7 +317,7 @@ void MoveGenerator::generate_pawn_moves(MoveList& moves) {
         if (m_generationMode == GenerationMode::CapturesOnly || (startBit & m_diagonalPinRays)) continue;
 
         int singleTarget = startSquare + pushOffset;
-        if (!Square::is_valid(singleTarget) || !Piece::isEmpty(m_board->get_square(static_cast<square_t>(singleTarget))))
+        if (!Square::is_valid(singleTarget) || !Piece::is_empty(m_board->get_square(static_cast<square_t>(singleTarget))))
             continue;
 
         square_t targetSquare = static_cast<square_t>(singleTarget);
@@ -333,10 +336,10 @@ void MoveGenerator::generate_pawn_moves(MoveList& moves) {
         if (Square::rank(startSquare) == startingRank) {
             square_t doubleTarget = static_cast<square_t>(singleTarget + pushOffset);
 
-            if (Piece::isEmpty(m_board->get_square(doubleTarget)) &&
+            if (Piece::is_empty(m_board->get_square(doubleTarget)) &&
                 (Square::bitboard(doubleTarget) & m_checkRayBitmask)) {
                 moves.add(Move::create(startSquare, doubleTarget));
-                
+
                 if (finished(moves)) return;
             }
         }
@@ -348,7 +351,7 @@ void MoveGenerator::generate_pawn_moves(MoveList& moves) {
 void MoveGenerator::generate_en_passant_moves(MoveList& moves, square_t targetSquare) {
     if (!Square::is_valid(targetSquare) ||
         Square::rank(targetSquare) != (m_friendlyColour == PieceColor::White ? 5 : 2) ||
-        !Piece::isEmpty(m_board->get_square(targetSquare)) || in_double_check()) return;
+        !Piece::is_empty(m_board->get_square(targetSquare)) || in_double_check()) return;
 
     square_t capturedSquare = Square::ep_square(targetSquare);
 

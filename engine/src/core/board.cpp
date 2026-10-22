@@ -1,6 +1,5 @@
 #include "core/board.hpp"
 
-#include <algorithm>
 #include <cassert>
 #include <limits>
 #include <stdexcept>
@@ -13,11 +12,15 @@
 namespace chess {
 
 bool GameState::has_kingside_castle_right(PieceColor color) const {
-    return (castlingRights & (color == PieceColor::White ? 1 : 4)) != 0;
+    return (castlingRights & CastlingRights::kingside(color)) != 0;
 }
 
 bool GameState::has_queenside_castle_right(PieceColor color) const {
-    return (castlingRights & (color == PieceColor::White ? 2 : 8)) != 0;
+    return (castlingRights & CastlingRights::queenside(color)) != 0;
+}
+
+Board::Board(std::nullptr_t) {
+    initialize();
 }
 
 Board::Board() {
@@ -40,11 +43,11 @@ void Board::make_move(move_t move, bool inSearch) {
     bool isCastling = moveFlag == Move::Type::Castling;
     bool isEnPassant = moveFlag == Move::Type::EnPassant;
     bool isPromotion = moveFlag == Move::Type::Promotion;
-    
+
     PieceColor moveColour = move_colour();
     PieceColor opponentColour = opponent_colour();
 
-    assert(!Piece::isEmpty(movedPiece) && Piece::color(movedPiece) == moveColour);
+    assert(!Piece::is_empty(movedPiece) && Piece::color(movedPiece) == moveColour);
     assert(startSquare != targetSquare);
     assert(m_plyCount < std::numeric_limits<int>::max());
     assert(m_currentGameState.fiftyMoveCounter < std::numeric_limits<int>::max());
@@ -52,25 +55,26 @@ void Board::make_move(move_t move, bool inSearch) {
     square_t captureSquare = isEnPassant ? Square::ep_square(targetSquare) : targetSquare;
     piece_t capturedPiece = isCastling ? Piece::create_empty() : m_squares[captureSquare];
 
-    assert(Piece::isEmpty(capturedPiece) ||
+    assert(Piece::is_empty(capturedPiece) ||
            (Piece::color(capturedPiece) == opponentColour && Piece::type(capturedPiece) != PieceType::King));
 
     assert(!isEnPassant || (movedPieceType == PieceType::Pawn &&
            targetSquare == m_currentGameState.enPassantSquare &&
-           Piece::type(capturedPiece) == PieceType::Pawn && Piece::isEmpty(m_squares[targetSquare])));
+           Piece::type(capturedPiece) == PieceType::Pawn && Piece::is_empty(m_squares[targetSquare])));
 
     m_gameStateHistory.push_back({ m_currentGameState, move, m_repetitionStart, inSearch, false });
 
     uint64_t newZobristKey = m_currentGameState.zobristKey;
     uint8_t prevCastleState = m_currentGameState.castlingRights;
-    if (m_currentGameState.enPassantSquare != Square::None)
+    if (m_currentGameState.enPassantHashed)
         newZobristKey ^= Zobrist::en_passant(Square::file(m_currentGameState.enPassantSquare));
 
     m_currentGameState.enPassantSquare = Square::None;
+    m_currentGameState.enPassantHashed = false;
     m_currentGameState.fiftyMoveCounter++;
     m_plyCount++;
 
-    if (!Piece::isEmpty(capturedPiece)) {
+    if (!Piece::is_empty(capturedPiece)) {
         remove_piece(capturedPiece, captureSquare);
         newZobristKey ^= Zobrist::piece(capturedPiece, captureSquare);
         m_currentGameState.fiftyMoveCounter = 0;
@@ -80,21 +84,14 @@ void Board::make_move(move_t move, bool inSearch) {
     }
 
     if (movedPieceType == PieceType::King)
-        m_currentGameState.castlingRights &= moveColour == PieceColor::White ? 12 : 3;
+        m_currentGameState.castlingRights &= ~CastlingRights::both(moveColour);
     else if (movedPieceType == PieceType::Rook)
         clear_rook_castle_right(startSquare, moveColour);
     else if (movedPieceType == PieceType::Pawn) {
         m_currentGameState.fiftyMoveCounter = 0;
 
-        if (Square::value_distance(startSquare, targetSquare) == 16) {
-            square_t enPassantSquare = Square::ep_square(targetSquare);
-            bitboard_t enemyPawns = m_pieceBitboards[Piece::create(PieceType::Pawn, opponentColour)];
-            
-            if (Attacks::get_pawn_attacks(enPassantSquare, moveColour) & enemyPawns) {
-                m_currentGameState.enPassantSquare = enPassantSquare;
-                newZobristKey ^= Zobrist::en_passant(Square::file(enPassantSquare));
-            }
-        }
+        if (Square::value_distance(startSquare, targetSquare) == 16)
+            m_currentGameState.enPassantSquare = Square::ep_square(targetSquare);
     }
 
     if (isCastling) {
@@ -136,13 +133,14 @@ void Board::make_move(move_t move, bool inSearch) {
     update_slider_bitboards();
     m_hasCachedInCheckValue = false;
 
-    if (!inSearch) {
-        if (movedPieceType == PieceType::Pawn || !Piece::isEmpty(capturedPiece))
-            m_repetitionStart = m_repetitionPositionHistory.size();
+    update_en_passant_hash();
+    if (movedPieceType == PieceType::Pawn || !Piece::is_empty(capturedPiece) ||
+        prevCastleState != m_currentGameState.castlingRights)
+        m_repetitionStart = m_repetitionPositionHistory.size();
 
-        m_repetitionPositionHistory.push_back(newZobristKey);
+    m_repetitionPositionHistory.push_back(m_currentGameState.zobristKey);
+    if (!inSearch)
         m_allGameMoves.push_back(move);
-    }
 }
 
 void Board::unmake_move(move_t move, bool inSearch) {
@@ -181,7 +179,7 @@ void Board::unmake_move(move_t move, bool inSearch) {
             move_piece(movedPiece, movedTo, movedFrom);
         }
 
-        if (!Piece::isEmpty(capturedPiece)) {
+        if (!Piece::is_empty(capturedPiece)) {
             square_t captureSquare = moveFlag == Move::Type::EnPassant ? Square::ep_square(movedTo) : movedTo;
             place_piece(capturedPiece, captureSquare);
         }
@@ -189,12 +187,12 @@ void Board::unmake_move(move_t move, bool inSearch) {
 
     m_currentGameState = previous.gameState;
     m_gameStateHistory.pop_back();
+    assert(!m_repetitionPositionHistory.empty());
+    m_repetitionPositionHistory.pop_back();
+    m_repetitionStart = previous.repetitionStart;
     if (!inSearch) {
-        assert(!m_allGameMoves.empty() && !m_repetitionPositionHistory.empty());
-
+        assert(!m_allGameMoves.empty());
         m_allGameMoves.pop_back();
-        m_repetitionPositionHistory.pop_back();
-        m_repetitionStart = previous.repetitionStart;
     }
 
     update_slider_bitboards();
@@ -211,14 +209,17 @@ void Board::make_null_move() {
     assert(m_plyCount < std::numeric_limits<int>::max());
 
     m_gameStateHistory.push_back({ m_currentGameState, 0, m_repetitionStart, true, true });
+    // A null position is not a real occurrence; descendants cannot match its ancestors.
+    m_repetitionStart = m_repetitionPositionHistory.size();
     m_currentGameState.zobristKey ^= Zobrist::side_to_move();
 
-    if (m_currentGameState.enPassantSquare != Square::None)
+    if (m_currentGameState.enPassantHashed)
         m_currentGameState.zobristKey ^= Zobrist::en_passant(Square::file(m_currentGameState.enPassantSquare));
 
     m_currentGameState.enPassantSquare = Square::None;
+    m_currentGameState.enPassantHashed = false;
     m_currentGameState.capturedPieceType = PieceType::None;
-   
+
     m_isWhiteToMove = !m_isWhiteToMove;
     m_plyCount++;
 
@@ -229,6 +230,7 @@ void Board::make_null_move() {
 void Board::unmake_null_move() {
     assert(!m_gameStateHistory.empty() && m_gameStateHistory.back().isNullMove);
 
+    m_repetitionStart = m_gameStateHistory.back().repetitionStart;
     m_currentGameState = m_gameStateHistory.back().gameState;
     m_gameStateHistory.pop_back();
 
@@ -266,7 +268,7 @@ bool Board::calculate_in_check_state() const {
 }
 
 void Board::load_start_position() {
-    load_position(FenUtility::startPositionFen);
+    load_position(FenUtility::StartPositionFen);
 }
 
 void Board::load_position(std::string_view fen) {
@@ -274,35 +276,66 @@ void Board::load_position(std::string_view fen) {
 }
 
 void Board::load_position(const FenUtility::PositionInfo& positionInfo) {
-    if (positionInfo.m_epFile < 0 || positionInfo.m_epFile > 8 ||
-        positionInfo.m_fiftyMovePlyCount < 0 ||
-        positionInfo.m_fiftyMovePlyCount == std::numeric_limits<int>::max() ||
-        positionInfo.m_moveCount < 1 ||
-        positionInfo.m_moveCount > std::numeric_limits<int>::max() / 2)
+    if (positionInfo.epFile < 0 || positionInfo.epFile > 8 ||
+        positionInfo.fiftyMovePlyCount < 0 ||
+        positionInfo.fiftyMovePlyCount == std::numeric_limits<int>::max() ||
+        positionInfo.moveCount < 1 ||
+        positionInfo.moveCount > std::numeric_limits<int>::max() / 2)
         throw std::invalid_argument("Invalid position counters or en-passant file");
 
-    initialize();
+    std::array<int, 2> kingCounts {};
+    std::array<int, 2> pawnCounts {};
+    std::array<int, 2> pieceCounts {};
+    std::array<square_t, 2> kingSquares {};
+    for (int index = 0; index < Square::Count; ++index) {
+        piece_t piece = positionInfo.squares[index];
+        if (Piece::is_empty(piece)) continue;
+        if (piece < 2 || piece >= m_pieceBitboards.size())
+            throw std::invalid_argument("Invalid piece code");
+        int colorIndex = static_cast<int>(Piece::color(piece));
+        ++pieceCounts[colorIndex];
+        if (Piece::type(piece) == PieceType::King) {
+            ++kingCounts[colorIndex];
+            kingSquares[colorIndex] = static_cast<square_t>(index);
+        }
+        if (Piece::type(piece) == PieceType::Pawn) {
+            ++pawnCounts[colorIndex];
+            if (index < 8 || index >= 56)
+                throw std::invalid_argument("Pawn on a promotion rank");
+        }
+    }
+    for (int colorIndex = 0; colorIndex < 2; ++colorIndex) {
+        if (kingCounts[colorIndex] != 1 || pawnCounts[colorIndex] > 8 || pieceCounts[colorIndex] > 16)
+            throw std::invalid_argument("Invalid king, pawn, or piece count");
+    }
+    if (Square::distance(kingSquares[0], kingSquares[1]) <= 1)
+        throw std::invalid_argument("Kings cannot occupy adjacent squares");
 
-    m_gameStartFen = positionInfo.m_fen;
+    // Build off to the side: validation and allocation failures preserve this board.
+    Board replacement(nullptr);
+    replacement.load_validated_position(positionInfo);
+    *this = std::move(replacement);
+}
+
+void Board::load_validated_position(const FenUtility::PositionInfo& positionInfo) {
+    m_gameStartFen = positionInfo.fen;
     for (int index = 0; index < Square::Count; index++) {
-        piece_t piece = positionInfo.m_squares[index];
-        if (!Piece::isEmpty(piece)) {
-            if (piece < 2 || piece >= m_pieceBitboards.size())
-                throw std::invalid_argument("Invalid piece code");
+        piece_t piece = positionInfo.squares[index];
+        if (!Piece::is_empty(piece)) {
             place_piece(piece, static_cast<square_t>(index));
             m_currentGameState.zobristKey ^= Zobrist::piece(piece, static_cast<square_t>(index));
         }
     }
 
-    m_isWhiteToMove = positionInfo.m_whiteToMove;
-    m_plyCount = (positionInfo.m_moveCount - 1) * 2 + (m_isWhiteToMove ? 0 : 1);
-    m_currentGameState.fiftyMoveCounter = positionInfo.m_fiftyMovePlyCount;
+    m_isWhiteToMove = positionInfo.whiteToMove;
+    m_plyCount = (positionInfo.moveCount - 1) * 2 + (m_isWhiteToMove ? 0 : 1);
+    m_currentGameState.fiftyMoveCounter = positionInfo.fiftyMovePlyCount;
 
     m_currentGameState.castlingRights =
-        (positionInfo.m_whiteCastleKingside ? 1 : 0) |
-        (positionInfo.m_whiteCastleQueenside ? 2 : 0) |
-        (positionInfo.m_blackCastleKingside ? 4 : 0) |
-        (positionInfo.m_blackCastleQueenside ? 8 : 0);
+        (positionInfo.whiteCastleKingside ? CastlingRights::WhiteKingside : 0) |
+        (positionInfo.whiteCastleQueenside ? CastlingRights::WhiteQueenside : 0) |
+        (positionInfo.blackCastleKingside ? CastlingRights::BlackKingside : 0) |
+        (positionInfo.blackCastleQueenside ? CastlingRights::BlackQueenside : 0);
 
     update_slider_bitboards();
 
@@ -310,7 +343,7 @@ void Board::load_position(const FenUtility::PositionInfo& positionInfo) {
         square_t kingFrom = Square::relative_square(Square::E1, color);
 
         if (m_squares[kingFrom] != Piece::create(PieceType::King, color)) {
-            m_currentGameState.castlingRights &= color == PieceColor::White ? 12 : 3;
+            m_currentGameState.castlingRights &= ~CastlingRights::both(color);
         } else {
             for (square_t corner : { Square::A1, Square::H1 }) {
                 square_t rookSquare = Square::relative_square(corner, color);
@@ -320,28 +353,38 @@ void Board::load_position(const FenUtility::PositionInfo& positionInfo) {
         }
     }
 
-    if (positionInfo.m_epFile != 0) {
-        square_t enPassantSquare = Square::index(m_isWhiteToMove ? 5 : 2, positionInfo.m_epFile - 1);
-        if (is_en_passant_square_valid(enPassantSquare)) {
-            m_currentGameState.enPassantSquare = enPassantSquare;
-            m_currentGameState.zobristKey ^= Zobrist::en_passant(Square::file(enPassantSquare));
-        }
+    if (positionInfo.epFile != 0) {
+        square_t targetSquare = Square::index(m_isWhiteToMove ? 5 : 2, positionInfo.epFile - 1);
+        square_t capturedSquare = Square::ep_square(targetSquare);
+        square_t originSquare = static_cast<square_t>(targetSquare + (m_isWhiteToMove ? 8 : -8));
+        if (!Piece::is_empty(m_squares[targetSquare]) || !Piece::is_empty(m_squares[originSquare]) ||
+            m_squares[capturedSquare] != Piece::create(PieceType::Pawn, opponent_colour()))
+            throw std::invalid_argument("Invalid en-passant target");
+        m_currentGameState.enPassantSquare = targetSquare;
+        update_en_passant_hash();
     }
 
     if (m_isWhiteToMove)
         m_currentGameState.zobristKey ^= Zobrist::side_to_move();
-    
+
     m_currentGameState.zobristKey ^= Zobrist::castling(m_currentGameState.castlingRights);
     m_repetitionPositionHistory.push_back(m_currentGameState.zobristKey);
+}
+
+void Board::update_en_passant_hash() {
+    m_currentGameState.enPassantHashed = m_currentGameState.enPassantSquare != Square::None &&
+        is_en_passant_square_valid(m_currentGameState.enPassantSquare);
+    if (m_currentGameState.enPassantHashed)
+        m_currentGameState.zobristKey ^= Zobrist::en_passant(Square::file(m_currentGameState.enPassantSquare));
 }
 
 bool Board::is_en_passant_square_valid(square_t targetSquare) const {
     square_t capturedSquare = Square::ep_square(targetSquare);
     PieceColor enemyColour = opponent_colour();
 
-    if (!Piece::isEmpty(m_squares[targetSquare]) ||  m_squares[capturedSquare] != Piece::create(PieceType::Pawn, enemyColour))
+    if (!Piece::is_empty(m_squares[targetSquare]) ||  m_squares[capturedSquare] != Piece::create(PieceType::Pawn, enemyColour))
         return false;
-    
+
     bitboard_t candidates = Attacks::get_pawn_attacks(targetSquare, enemyColour) &
         m_pieceBitboards[Piece::create(PieceType::Pawn, move_colour())];
 
@@ -369,11 +412,14 @@ bool Board::is_en_passant_square_valid(square_t targetSquare) const {
 }
 
 void Board::place_piece(piece_t piece, square_t square) {
-    assert(Square::is_valid(square) && Piece::isEmpty(m_squares[square]));
+    assert(Square::is_valid(square) && Piece::is_empty(m_squares[square]));
     assert(piece >= 2 && piece < m_pieceBitboards.size());
 
     int colourIndex = static_cast<int>(Piece::color(piece));
-    m_allPieceLists[piece].push_back(square);
+    auto& count = m_pieceListCounts[piece];
+    assert(count < m_allPieceLists[piece].size());
+    m_pieceListIndices[square] = count;
+    m_allPieceLists[piece][count++] = square;
 
     Bitboard::set(m_pieceBitboards[piece], square);
     Bitboard::set(m_colourBitboards[colourIndex], square);
@@ -388,16 +434,17 @@ void Board::place_piece(piece_t piece, square_t square) {
 }
 
 void Board::remove_piece(piece_t piece, square_t square) {
-    assert(Square::is_valid(square) && m_squares[square] == piece && !Piece::isEmpty(piece));
+    assert(Square::is_valid(square) && m_squares[square] == piece && !Piece::is_empty(piece));
 
     int colourIndex = static_cast<int>(Piece::color(piece));
     auto& pieceList = m_allPieceLists[piece];
 
-    auto entry = std::find(pieceList.begin(), pieceList.end(), square);
-    assert(entry != pieceList.end());
-
-    *entry = pieceList.back();
-    pieceList.pop_back();
+    uint8_t index = m_pieceListIndices[square];
+    auto& count = m_pieceListCounts[piece];
+    assert(count != 0 && index < count && pieceList[index] == square);
+    square_t lastSquare = pieceList[--count];
+    pieceList[index] = lastSquare;
+    m_pieceListIndices[lastSquare] = index;
 
     Bitboard::clear(m_pieceBitboards[piece], square);
     Bitboard::clear(m_colourBitboards[colourIndex], square);
@@ -411,21 +458,31 @@ void Board::remove_piece(piece_t piece, square_t square) {
 }
 
 void Board::move_piece(piece_t piece, square_t startSquare, square_t targetSquare) {
-    remove_piece(piece, startSquare);
-    place_piece(piece, targetSquare);
+    assert(m_squares[startSquare] == piece && Piece::is_empty(m_squares[targetSquare]));
+    int colorIndex = static_cast<int>(Piece::color(piece));
+    uint8_t index = m_pieceListIndices[startSquare];
+    m_allPieceLists[piece][index] = targetSquare;
+    m_pieceListIndices[targetSquare] = index;
+    bitboard_t changedSquares = Square::bitboard(startSquare) | Square::bitboard(targetSquare);
+    m_pieceBitboards[piece] ^= changedSquares;
+    m_colourBitboards[colorIndex] ^= changedSquares;
+    m_squares[startSquare] = Piece::create_empty();
+    m_squares[targetSquare] = piece;
+    if (Piece::type(piece) == PieceType::King)
+        m_kingSquare[colorIndex] = targetSquare;
 }
 
 void Board::clear_rook_castle_right(square_t square, PieceColor color) {
     if (square == Square::relative_square(Square::H1, color))
-        m_currentGameState.castlingRights &= color == PieceColor::White ? 14 : 11;
+        m_currentGameState.castlingRights &= ~CastlingRights::kingside(color);
     else if (square == Square::relative_square(Square::A1, color))
-        m_currentGameState.castlingRights &= color == PieceColor::White ? 13 : 7;
+        m_currentGameState.castlingRights &= ~CastlingRights::queenside(color);
 }
 
 void Board::update_slider_bitboards() {
     PieceColor friendlyColour = move_colour();
     PieceColor enemyColour = opponent_colour();
-    m_allPiecesBitboard = m_colourBitboards[whiteIndex] | m_colourBitboards[blackIndex];
+    m_allPiecesBitboard = m_colourBitboards[WhiteIndex] | m_colourBitboards[BlackIndex];
 
     m_friendlyOrthogonalSliders = m_pieceBitboards[Piece::create(PieceType::Rook, friendlyColour)] |
         m_pieceBitboards[Piece::create(PieceType::Queen, friendlyColour)];
@@ -446,11 +503,9 @@ void Board::initialize() {
     m_pieceBitboards.fill(0);
     m_colourBitboards.fill(0);
 
-    for (auto& pieceList : m_allPieceLists) {
-        pieceList.clear();
-        pieceList.reserve(16);
-    }
-    
+    m_pieceListCounts.fill(0);
+    m_pieceListIndices.fill(0);
+
     m_totalPieceCountWithoutPawnsAndKings = 0;
     m_isWhiteToMove = true;
     m_plyCount = 0;
@@ -468,11 +523,11 @@ void Board::initialize() {
 
     m_cachedInCheckValue = false;
     m_hasCachedInCheckValue = false;
-    
+
     update_slider_bitboards();
 }
 
-std::pair<GameResult, GameResultReason> Board::isGameOver() const {
+std::pair<GameResult, GameResultReason> Board::is_game_over() const {
     MoveGenerator generator;
     if (!generator.has_legal_moves(*this)) {
         if (generator.in_check())
@@ -480,12 +535,12 @@ std::pair<GameResult, GameResultReason> Board::isGameOver() const {
         return { GameResult::Draw, GameResultReason::Stalemate };
     }
 
-    if (GameResultUtility::isInsufficientMaterial(*this))
-        return { GameResult::Draw, GameResultReason::Insufficient_Material };
-    if (GameResultUtility::isRepetition(*this, 3))
-        return { GameResult::Draw, GameResultReason::Threefold_Repetition };
-    if (GameResultUtility::isHalfMoveDraw(*this))
-        return { GameResult::Draw, GameResultReason::Fifty_Move_Rule };
+    if (GameResultUtility::is_insufficient_material(*this))
+        return { GameResult::Draw, GameResultReason::InsufficientMaterial };
+    if (GameResultUtility::is_repetition(*this, 3))
+        return { GameResult::Draw, GameResultReason::ThreefoldRepetition };
+    if (GameResultUtility::is_half_move_draw(*this))
+        return { GameResult::Draw, GameResultReason::FiftyMoveRule };
 
     return { GameResult::None, GameResultReason::None };
 }
@@ -507,7 +562,8 @@ bitboard_t Board::enemy_diagonal_sliders() const { return m_enemyDiagonalSliders
 int Board::total_piece_count_without_pawns_and_kings() const { return m_totalPieceCountWithoutPawnsAndKings; }
 
 std::span<const square_t> Board::piece_list(PieceType type, PieceColor color) const {
-    return m_allPieceLists[Piece::create(type, color)];
+    piece_t piece = Piece::create(type, color);
+    return { m_allPieceLists[piece].data(), m_pieceListCounts[piece] };
 }
 
 std::span<const square_t> Board::rooks(PieceColor color) const { return piece_list(PieceType::Rook, color); }

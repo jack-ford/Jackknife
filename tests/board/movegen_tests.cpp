@@ -1,4 +1,5 @@
 #include "movegen/movegen.hpp"
+#include "movegen/magic.hpp"
 #include "utils/fen_utility.hpp"
 
 #include <algorithm>
@@ -7,6 +8,9 @@
 #include <stdexcept>
 
 using namespace chess;
+
+// Exercise attack lookup before main and before other translation units' initialization.
+const bitboard_t startupRookAttacks = Magic::get_rook_attacks(Square::A1, 0);
 
 static void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
@@ -37,10 +41,40 @@ static void check_perft(std::string_view fen, int depth, uint64_t expected) {
     require(board.zobrist_key() == originalKey && board.current_fen() == originalFen, "perft modified board");
 }
 
+static void verify_magic_tables() {
+    for (bool orthogonal : { false, true }) {
+        const auto& directions = orthogonal ? RookDirections : BishopDirections;
+        const auto& masks = orthogonal ? Magic::RookMasks : Magic::BishopMasks;
+        for (int index = 0; index < Square::Count; ++index) {
+            square_t square = static_cast<square_t>(index);
+            bitboard_t blockers = 0;
+            do {
+                bitboard_t expected = 0;
+                for (const auto& direction : directions) {
+                    int rank = Square::rank(square) + direction.rank;
+                    int file = Square::file(square) + direction.file;
+                    while (Square::is_valid(rank, file)) {
+                        bitboard_t bit = Square::bitboard(Square::index(rank, file));
+                        expected |= bit;
+                        if (blockers & bit) break;
+                        rank += direction.rank;
+                        file += direction.file;
+                    }
+                }
+                require(Magic::get_slider_attacks(square, blockers, orthogonal) == expected,
+                    "magic lookup differs from ray traversal");
+                blockers = (blockers - masks[index]) & masks[index];
+            } while (blockers != 0);
+        }
+    }
+}
+
 int main() {
     try {
+        require(startupRookAttacks == 0x01010101010101FEULL, "global attack initialization");
+        verify_magic_tables();
         const auto expectResult = [](const Board& board, GameResult result, GameResultReason reason) {
-            require(board.isGameOver() == std::pair{result, reason}, "game result mismatch");
+            require(board.is_game_over() == std::pair{result, reason}, "game result mismatch");
         };
         Board ongoing;
         expectResult(ongoing, GameResult::None, GameResultReason::None);
@@ -51,23 +85,23 @@ int main() {
         Board drawnStalemate("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1");
         expectResult(drawnStalemate, GameResult::Draw, GameResultReason::Stalemate);
         Board bareKings("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
-        expectResult(bareKings, GameResult::Draw, GameResultReason::Insufficient_Material);
+        expectResult(bareKings, GameResult::Draw, GameResultReason::InsufficientMaterial);
         Board belowLimit("4k3/8/8/8/8/8/8/R3K3 w - - 99 1");
         expectResult(belowLimit, GameResult::None, GameResultReason::None);
         belowLimit.make_move(Move::create(Square::A1, Square::A2));
-        expectResult(belowLimit, GameResult::Draw, GameResultReason::Fifty_Move_Rule);
+        expectResult(belowLimit, GameResult::Draw, GameResultReason::FiftyMoveRule);
         for (int cycle = 0; cycle < 2; ++cycle) {
             ongoing.make_move(Move::create(Square::G1, Square::F3));
             ongoing.make_move(Move::create(Square::G8, Square::F6));
             ongoing.make_move(Move::create(Square::F3, Square::G1));
             ongoing.make_move(Move::create(Square::F6, Square::G8));
             expectResult(ongoing, cycle == 0 ? GameResult::None : GameResult::Draw,
-                cycle == 0 ? GameResultReason::None : GameResultReason::Threefold_Repetition);
+                cycle == 0 ? GameResultReason::None : GameResultReason::ThreefoldRepetition);
         }
         MoveGenerator resultGenerator;
-        require(GameResultUtility::isMate(resultGenerator.generate_moves(checkmate), checkmate.is_in_check()), "mate helper");
-        require(!GameResultUtility::isMate(resultGenerator.generate_moves(drawnStalemate), drawnStalemate.is_in_check()), "stalemate is not mate");
-        check_perft(FenUtility::startPositionFen, 4, 197281);
+        require(GameResultUtility::is_mate(resultGenerator.generate_moves(checkmate), checkmate.is_in_check()), "mate helper");
+        require(!GameResultUtility::is_mate(resultGenerator.generate_moves(drawnStalemate), drawnStalemate.is_in_check()), "stalemate is not mate");
+        check_perft(FenUtility::StartPositionFen, 4, 197281);
         check_perft("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 3, 97862);
         check_perft("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 4, 43238);
         check_perft("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 3, 9467);
@@ -93,7 +127,7 @@ int main() {
                 require(generator.is_legal(board, move), "legality disagrees with generation");
             for (move_t move : captures)
                 require(Move::type(move) == Move::Type::EnPassant ||
-                    !Piece::isEmpty(board.get_square(Move::to(move))), "quiet move in captures");
+                    !Piece::is_empty(board.get_square(Move::to(move))), "quiet move in captures");
             auto knights = generator.generate_moves(board, MoveGenerator::GenerationMode::All, MoveGenerator::Knight);
             for (move_t move : knights)
                 require(Piece::type(board.get_square(Move::from(move))) == PieceType::Knight, "piece filter");
@@ -102,7 +136,7 @@ int main() {
         Board start;
         require(start.king_square(PieceColor::White) == Square::E1, "default white king");
         require(start.king_square(PieceColor::Black) == Square::E8, "default black king");
-        require(start.current_fen() == FenUtility::startPositionFen, "default starting position");
+        require(start.current_fen() == FenUtility::StartPositionFen, "default starting position");
         require(generator.generate_moves(start).size() == 20, "default opening moves");
         require(!generator.is_legal(start, Move::create(Square::E2, Square::E5)), "illegal pawn leap");
         require(!generator.is_legal(start, Move::create<Move::Type::Promotion>(Square::G1, Square::F3)),

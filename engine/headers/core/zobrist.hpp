@@ -12,38 +12,38 @@ namespace chess {
 class Zobrist {
     public:
         static constexpr uint64_t piece(piece_t piece, square_t square) {
-            assert(piece >= 2 && piece < m_pieceIndex.size());
+            assert(piece >= 2 && piece < PieceIndex.size());
             assert(Square::is_valid(square));
-            return m_randomArray[64 * m_pieceIndex[piece] + square];
+            return RandomArray[64 * PieceIndex[piece] + square];
         }
 
         // Zero-based file index.
         static constexpr uint64_t en_passant(int file) {
             assert(file >= 0 && file < 8);
-            return m_randomArray[772 + file];
+            return RandomArray[772 + file];
         }
 
         // Bits: white kingside, white queenside, black kingside, black queenside.
         static constexpr uint64_t castling(uint8_t rights) {
             assert(rights < 16);
-            return m_castlingKeys[rights];
+            return CastlingKeys[rights];
         }
 
         static constexpr uint64_t castling_index(int index) {
             assert(index >= 0 && index < 4);
-            return m_randomArray[768 + index];
+            return RandomArray[768 + index];
         }
 
         // Board includes this key when White is to move.
         static constexpr uint64_t side_to_move() {
-            return m_randomArray[780];
+            return RandomArray[780];
         }
 
     private:
         Zobrist() = delete;
 
         // Polyglot constants
-        inline static constexpr std::array<uint64_t, 781> m_randomArray = {{
+        inline static constexpr std::array<uint64_t, 781> RandomArray = {{
             0x9D39247E33776D41ULL, 0x2AF7398005AAA5C7ULL, 0x44DB015024623547ULL, 0x9C15F73E62A76AE2ULL, 0x75834465489C0C89ULL,
             0x3290AC3A203001BFULL, 0x0FBBAD1F61042279ULL, 0xE83A908FF2FB60CAULL, 0x0D7E765D58755C10ULL, 0x1A083822CEAFE02DULL,
             0x9605D5F0E25EC3B0ULL, 0xD021FF5CD13A2ED5ULL, 0x40BDF15D4A672E32ULL, 0x011355146FD56395ULL, 0x5DB4832046F3D9E5ULL,
@@ -205,16 +205,16 @@ class Zobrist {
 
         // Project piece codes: empty, unused, black/white king, pawn, knight,
         // bishop, rook, queen. Polyglot orders pawn..king, black then white.
-        inline static constexpr std::array<int, 14> m_pieceIndex = {
+        inline static constexpr std::array<int, 14> PieceIndex = {
             -1, -1, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
         };
 
-        inline static constexpr std::array<uint64_t, 16> m_castlingKeys = []() constexpr {
+        inline static constexpr std::array<uint64_t, 16> CastlingKeys = []() constexpr {
             std::array<uint64_t, 16> keys {};
             for (int rights = 0; rights < 16; ++rights) {
                 for (int index = 0; index < 4; ++index) {
                     if (rights & (1 << index))
-                        keys[rights] ^= m_randomArray[768 + index];
+                        keys[rights] ^= RandomArray[768 + index];
                 }
             }
             return keys;

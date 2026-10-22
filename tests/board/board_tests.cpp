@@ -1,6 +1,7 @@
 #include "core/board.hpp"
 #include "utils/fen_utility.hpp"
 #include "core/zobrist.hpp"
+#include "movegen/movegen.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -21,11 +22,11 @@ static void verify(const Board& board) {
     uint64_t key = Zobrist::castling(board.current_game_state().castlingRights);
     if (board.is_white_to_move()) key ^= Zobrist::side_to_move();
     square_t ep = board.current_game_state().enPassantSquare;
-    if (ep != Square::None) key ^= Zobrist::en_passant(Square::file(ep));
+    if (FenUtility::en_passant_can_be_captured(board)) key ^= Zobrist::en_passant(Square::file(ep));
     for (int i = 0; i < 64; ++i) {
         square_t square = static_cast<square_t>(i);
         piece_t piece = board.get_square(square);
-        if (Piece::isEmpty(piece)) continue;
+        if (Piece::is_empty(piece)) continue;
         pieceBoards[piece] |= Square::bitboard(square);
         colourBoards[static_cast<int>(Piece::color(piece))] |= Square::bitboard(square);
         key ^= Zobrist::piece(piece, square);
@@ -88,7 +89,7 @@ static void round_trip(Board& board, move_t move, bool inSearch = false) {
 
 int main() {
     try {
-        Board board = Board::create_board();
+        Board board;
         verify(board);
         require(board.zobrist_key() == 0x463B96181691FC9CULL, "starting-position Polyglot key");
         board.make_move(Move::create(Square::E2, Square::E4));
@@ -112,15 +113,15 @@ int main() {
         board.make_move(Move::create(Square::G1, Square::F3));
         board.make_move(Move::create(Square::G8, Square::F6));
         round_trip(board, Move::create(Square::E2, Square::E4));
-        Board copy = Board::create_board(board);
+        Board copy = board;
         require(copy.current_fen() == board.current_fen(), "game copy mismatch");
         board.make_move(Move::create(Square::B1, Square::C3), true);
-        Board gameCopy = Board::create_board(board);
-        require(gameCopy.current_fen() == copy.current_fen(), "game copy included search move");
+        Board gameCopy = board;
+        require(gameCopy.current_fen() == board.current_fen(), "copy lost search position");
         board.unmake_move();
         board.unmake_move();
         board.unmake_move();
-        require(board.current_fen() == FenUtility::startPositionFen, "nested undo mismatch");
+        require(board.current_fen() == FenUtility::StartPositionFen, "nested undo mismatch");
 
         for (PieceColor color : { PieceColor::White, PieceColor::Black }) {
             std::string side = color == PieceColor::White ? "w" : "b";
@@ -152,7 +153,7 @@ int main() {
         round_trip(epBlack, Move::create<Move::Type::EnPassant>(Square::E4, Square::D3));
 
         Board pinned("4k3/8/8/r4pPK/8/8/8/8 w - f6 0 1");
-        require(pinned.current_game_state().enPassantSquare == Square::None, "illegal EP survived load");
+        require(pinned.current_game_state().enPassantSquare == Square::F6, "raw EP target lost");
         Board doublePush("4k3/3p4/8/4P3/8/8/8/4K3 b - - 0 1");
         doublePush.make_move(Move::create(Square::D7, Square::D5));
         require(doublePush.current_game_state().enPassantSquare == Square::D6, "double push EP missing");
@@ -178,8 +179,7 @@ int main() {
             "4r1k1/8/8/8/8/8/8/4K3 w - - 0 1",
             "6k1/8/8/8/1b6/8/8/4K3 w - - 0 1",
             "6k1/8/8/8/8/5n2/8/4K3 w - - 0 1",
-            "6k1/8/8/8/8/8/3p4/4K3 w - - 0 1",
-            "8/8/8/8/8/8/4k3/4K3 w - - 0 1"
+            "6k1/8/8/8/8/8/3p4/4K3 w - - 0 1"
         }) {
             Board checkBoard(fen);
             require(checkBoard.is_in_check(), "missed check");
@@ -196,8 +196,8 @@ int main() {
 
 
         auto partial = FenUtility::position_from_fen("8/8/8/8/8/8/8/8 w -");
-        require(partial.m_fiftyMovePlyCount == 0 && partial.m_moveCount == 1, "FEN counter defaults");
-        require(FenUtility::flip_fen(FenUtility::startPositionFen) ==
+        require(partial.fiftyMovePlyCount == 0 && partial.moveCount == 1, "FEN counter defaults");
+        require(FenUtility::flip_fen(FenUtility::StartPositionFen) ==
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1", "flip start");
         std::string asymmetric = "4k3/8/8/3pP3/8/8/8/4K2R w K d6 17 42";
         require(FenUtility::flip_fen(FenUtility::flip_fen(asymmetric)) == asymmetric, "flip twice");
@@ -227,6 +227,108 @@ int main() {
         require(FenUtility::current_fen(epFilter, false).find(" - 0 2") != std::string::npos, "illegal EP emitted");
         require(epFilter.current_fen() == beforeFilter && epFilter.zobrist_key() == beforeKey &&
             std::ranges::equal(beforeHistory, epFilter.repetition_position_history()), "FEN formatting mutated board");
+
+        // Canonical hashes ignore unusable EP targets, while FEN preserves them.
+        Board pinnedPush("3k4/8/8/8/3p4/8/4P3/K2R4 w - - 0 1");
+        pinnedPush.make_move(Move::create(Square::E2, Square::E4));
+        verify(pinnedPush);
+        Board reloaded(pinnedPush.current_fen());
+        Board withoutEp("3k4/8/8/8/3pP3/8/8/K2R4 b - - 0 1");
+        require(pinnedPush.zobrist_key() == reloaded.zobrist_key() &&
+            reloaded.zobrist_key() == withoutEp.zobrist_key(), "pinned EP changes position identity");
+        require(reloaded.current_fen() == pinnedPush.current_fen(), "raw EP round trip");
+        Board ordinaryPush;
+        ordinaryPush.make_move(Move::create(Square::E2, Square::E4));
+        require(ordinaryPush.current_fen().find(" e3 ") != std::string::npos, "uncapturable target missing");
+        require(FenUtility::current_fen(ordinaryPush, false).find(" e3 ") == std::string::npos,
+            "normalized FEN kept uncapturable target");
+        Board legalWithoutEp("4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1");
+        require(epWhite.zobrist_key() != legalWithoutEp.zobrist_key(), "legal EP missing from identity");
+        round_trip(pinnedPush, Move::create(Square::D8, Square::C8), true);
+
+        // Search repetitions include both the real game and the current path.
+        const std::array<move_t, 4> cycleMoves {
+            Move::create(Square::G1, Square::F3), Move::create(Square::G8, Square::F6),
+            Move::create(Square::F3, Square::G1), Move::create(Square::F6, Square::G8)
+        };
+        Board searchBoard;
+        for (move_t move : cycleMoves) searchBoard.make_move(move);
+        for (move_t move : cycleMoves) searchBoard.make_move(move, true);
+        require(GameResultUtility::is_repetition(searchBoard, 3), "search threefold missed");
+        require(searchBoard.is_game_over().second == GameResultReason::ThreefoldRepetition,
+            "search adjudication missed repetition");
+        require(searchBoard.all_game_moves().size() == 4, "search modified game moves");
+        round_trip(searchBoard, Move::create(Square::E2, Square::E4), true);
+        searchBoard.make_null_move();
+        require(searchBoard.repetition_position_history().empty(), "null retained real ancestors");
+        searchBoard.make_null_move();
+        require(!GameResultUtility::is_repetition(searchBoard), "null moves created repetition");
+        for (move_t move : cycleMoves) searchBoard.make_move(move, true);
+        require(!GameResultUtility::is_repetition(searchBoard), "search crossed null boundary");
+        for (int i = 0; i < 4; ++i) searchBoard.unmake_move();
+        searchBoard.unmake_null_move();
+        searchBoard.unmake_null_move();
+        require(GameResultUtility::is_repetition(searchBoard, 3), "null undo lost history");
+        for (int i = 0; i < 4; ++i) searchBoard.unmake_move();
+        require(!GameResultUtility::is_repetition(searchBoard, 3) &&
+            GameResultUtility::is_repetition(searchBoard, 2), "search undo history mismatch");
+
+        // All failures must preserve a populated board, including its undo history.
+        std::string savedFen = searchBoard.current_fen();
+        uint64_t savedKey = searchBoard.zobrist_key();
+        for (const char* invalid : {
+            "8/8/8/8/8/8/8/8 w - - 0 1",
+            "4k3/8/8/8/8/8/8/4KK2 w - - 0 1",
+            "8/8/8/8/8/8/4k3/4K3 w - - 0 1",
+            "P3k3/8/8/8/8/8/8/4K3 w - - 0 1",
+            "4k3/8/8/8/8/8/8/4K3 w - d6 0 1",
+            "4k3/3n4/8/3pP3/8/8/8/4K3 w - d6 0 1",
+            "4k3/8/8/8/P7/8/PPPPPPPP/4K3 w - - 0 1",
+            "4k3/8/8/8/N7/8/PPPPPPPP/RNBQKBNR w KQ - 0 1"
+        }) {
+            bool rejected = false;
+            try { searchBoard.load_position(invalid); }
+            catch (const std::invalid_argument&) { rejected = true; }
+            require(rejected, "structurally invalid board accepted");
+            require(searchBoard.current_fen() == savedFen && searchBoard.zobrist_key() == savedKey,
+                "failed FEN load changed board");
+            verify(searchBoard);
+        }
+        auto badInfo = FenUtility::position_from_fen(FenUtility::StartPositionFen);
+        badInfo.squares[Square::E8] = 255;
+        bool rejected = false;
+        try { searchBoard.load_position(badInfo); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        require(rejected && searchBoard.current_fen() == savedFen && searchBoard.zobrist_key() == savedKey,
+            "failed PositionInfo load changed board");
+        require(GameResultUtility::is_repetition(searchBoard, 2), "failed load changed repetition history");
+        searchBoard.unmake_move();
+        verify(searchBoard);
+
+        // Exercise indexed piece lists, canonical keys, and undo over varied legal play.
+        uint64_t randomState = 0x123456789ABCDEFULL;
+        for (int game = 0; game < 12; ++game) {
+            Board randomBoard;
+            MoveGenerator generator;
+            int plies = 0;
+            for (; plies < 160; ++plies) {
+                auto moves = generator.generate_moves(randomBoard);
+                if (moves.is_empty()) break;
+                randomState ^= randomState << 13;
+                randomState ^= randomState >> 7;
+                randomState ^= randomState << 17;
+                randomBoard.make_move(moves[static_cast<int>(randomState % moves.size())], true);
+                verify(randomBoard);
+                Board roundTrip(randomBoard.current_fen());
+                require(roundTrip.zobrist_key() == randomBoard.zobrist_key(), "played/load hash mismatch");
+            }
+            while (plies-- > 0) {
+                randomBoard.unmake_move();
+                verify(randomBoard);
+            }
+            require(randomBoard.current_fen() == FenUtility::StartPositionFen &&
+                randomBoard.repetition_position_history().size() == 1, "random walk undo mismatch");
+        }
 
         std::cout << "Board, FEN, and Zobrist tests passed using production implementations.\n";
         return 0;

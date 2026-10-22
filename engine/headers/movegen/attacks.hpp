@@ -16,12 +16,12 @@ using distance_table_t = std::array<std::array<square_t, Square::Count>, Square:
 
 class Attacks {
     public:
-        static const leaper_attack_table_t knightAttacks;
-        static const leaper_attack_table_t kingAttacks;
-        static const pawn_attack_table_t pawnAttacks;
+        static const leaper_attack_table_t KnightAttacks;
+        static const leaper_attack_table_t KingAttacks;
+        static const pawn_attack_table_t PawnAttacks;
 
-        static const distance_table_t orthogonalDistance;
-        static const distance_table_t kingDistance;
+        static const distance_table_t OrthogonalDistance;
+        static const distance_table_t KingDistance;
 
         static bitboard_t get_pawn_attacks(square_t square, PieceColor color);
         static bitboard_t get_left_pawn_attacks(bitboard_t pawns, PieceColor color);

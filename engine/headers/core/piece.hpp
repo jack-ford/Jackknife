@@ -44,11 +44,11 @@ namespace Piece {
         return static_cast<PieceColor>(piece & 1);
     }
 
-    constexpr bool isEmpty(piece_t piece) {
+    constexpr bool is_empty(piece_t piece) {
         return piece == 0;
     }
 
-    inline constexpr std::array<char, 14> symbols = {
+    inline constexpr std::array<char, 14> Symbols = {
         '.', '.',
         'k', 'K',
         'p', 'P',
@@ -59,7 +59,7 @@ namespace Piece {
     };
 
     constexpr char symbol(piece_t piece) {
-        return piece < symbols.size() ? symbols[piece] : '?';
+        return piece < Symbols.size() ? Symbols[piece] : '?';
     }
 
     constexpr piece_t create(char symbol) {

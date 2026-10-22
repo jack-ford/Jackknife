@@ -6,17 +6,18 @@
 
 namespace chess::GameResultUtility {
 
-bool isRepetition(const Board& board, int count) {
+bool is_repetition(const Board& board, int count) {
+    if (count <= 0) return false;
     auto history = board.repetition_position_history();
     auto occurrences = std::count(history.begin(), history.end(), board.zobrist_key());
     return occurrences >= count;
 }
 
-bool isHalfMoveDraw(const Board& board) {
+bool is_half_move_draw(const Board& board) {
     return board.fifty_move_counter() >= 100;
 }
 
-bool isInsufficientMaterial(const Board& board) {
+bool is_insufficient_material(const Board& board) {
     const int count = Bitboard::count(board.all_pieces_bitboard());
 
     if (count == 2) return true;
@@ -51,7 +52,7 @@ bool isInsufficientMaterial(const Board& board) {
     return false;
 }
 
-bool isMate(const MoveList& legalMoves, bool inCheck) {
+bool is_mate(const MoveList& legalMoves, bool inCheck) {
     return legalMoves.is_empty() && inCheck;
 }
 

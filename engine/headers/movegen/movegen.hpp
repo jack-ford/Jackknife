@@ -41,7 +41,7 @@ class MoveGenerator {
     private:
         using between_table_t = std::array<std::array<bitboard_t, 64>, 64>;
         static constexpr between_table_t create_squares_between();
-        static const between_table_t m_squaresBetween;
+        static const between_table_t SquaresBetween;
 
         void initialize(const Board& board, GenerationMode mode, bool oneMoveOnly);
         void calculate_attack_data();

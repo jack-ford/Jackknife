@@ -136,12 +136,12 @@ namespace Square {
         return sq ^ 8;
     }
 
-    constexpr square_t castling_king_square(bool king_side, PieceColor color) {
-        return relative_square(king_side ? G1 : C1, color);
+    constexpr square_t castling_king_square(bool kingSide, PieceColor color) {
+        return relative_square(kingSide ? G1 : C1, color);
     }
 
-    constexpr square_t castling_rook_square(bool king_side, PieceColor color) {
-        return relative_square(king_side ? F1 : D1, color);
+    constexpr square_t castling_rook_square(bool kingSide, PieceColor color) {
+        return relative_square(kingSide ? F1 : D1, color);
     }
 
     constexpr Direction relative_direction(Direction dir, PieceColor color) {
