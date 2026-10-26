@@ -73,7 +73,7 @@ struct Variation {
 };
 
 struct ScoredMove {
-    move_t move;
+    chess::move_t move;
     int score;
     int exchange;
 };
