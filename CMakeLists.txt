@@ -32,9 +32,14 @@ add_library(chess_engine
     engine/src/search/aspiration.cpp
     engine/src/eval/static_exchange.cpp
     engine/src/movegen/movegen.cpp
+    engine/src/search/opening_book.cpp
+    engine/src/search/syzygy.cpp
+    engine/src/search/controller.cpp
     engine/src/search/search.cpp
+    engine/src/search/probcut.cpp
     engine/src/search/negamax.cpp
     engine/src/search/quiescence.cpp
+    engine/src/search/move_picker.cpp
     engine/src/search/move_ordering.cpp
     engine/src/utils/search_utility.cpp
     engine/src/search/transposition_table.cpp
@@ -51,6 +56,18 @@ target_include_directories(chess_engine
 )
 target_compile_features(chess_engine PUBLIC cxx_std_20)
 
+add_library(fathom STATIC third_party/fathom/tbprobe.c)
+set_source_files_properties(third_party/fathom/tbprobe.c PROPERTIES LANGUAGE CXX)
+target_include_directories(fathom PUBLIC third_party/fathom)
+target_compile_features(fathom PRIVATE cxx_std_20)
+if(WIN32)
+    target_compile_definitions(fathom PRIVATE NOMINMAX _CRT_SECURE_NO_WARNINGS)
+else()
+    find_package(Threads REQUIRED)
+    target_link_libraries(fathom PRIVATE Threads::Threads)
+endif()
+target_link_libraries(chess_engine PRIVATE fathom)
+
 if(CHESS_NNUE_AVX2)
     if(MSVC)
         set_source_files_properties(engine/src/eval/nnue/kernels.cpp PROPERTIES COMPILE_OPTIONS /arch:AVX2)
@@ -66,6 +83,9 @@ add_executable(chess_cli
 )
 
 target_link_libraries(chess_cli PRIVATE chess_engine)
+
+add_executable(chess_bench cli/bench.cpp)
+target_link_libraries(chess_bench PRIVATE chess_engine)
 
 if(CHESS_BUILD_GUI)
     find_package(SDL3 CONFIG REQUIRED)
@@ -88,6 +108,13 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_test(NAME tactical_suite COMMAND chess_bench 4 "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/tactics.txt")
+    add_executable(network_loading_tests tests/network_loading_tests.cpp)
+    target_link_libraries(network_loading_tests PRIVATE chess_engine)
+    target_compile_definitions(network_loading_tests PRIVATE TEST_NETWORK_PATH="${NNUE_FILE}"
+        INVALID_NETWORK_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/syzygy/KQvK.rtbw")
+    add_test(NAME network_loading COMMAND network_loading_tests)
+
     add_executable(nnue_tests tests/nnue_tests.cpp)
     target_link_libraries(nnue_tests PRIVATE chess_engine)
     add_test(NAME nnue_incremental COMMAND nnue_tests)
@@ -125,6 +152,11 @@ if(BUILD_TESTING)
     add_executable(movegen_tests tests/board/movegen_tests.cpp)
     target_link_libraries(movegen_tests PRIVATE chess_engine)
     add_test(NAME legal_move_generation COMMAND movegen_tests)
+
+    add_executable(search_upgrade_tests tests/search_upgrade_tests.cpp)
+    target_link_libraries(search_upgrade_tests PRIVATE chess_engine)
+    target_compile_definitions(search_upgrade_tests PRIVATE SYZYGY_TEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/syzygy")
+    add_test(NAME search_upgrades COMMAND search_upgrade_tests)
 
     add_executable(search_tests tests/search_tests.cpp)
     target_link_libraries(search_tests PRIVATE chess_engine)
