@@ -9,7 +9,7 @@ int Search::aspiration_window(chess::Board& board, int depth, int center, const 
     if (!m_options.aspirationWindows || depth < AspirationDepth || std::abs(center) >= MateThreshold)
         return root_max(board, depth, -Infinity, Infinity, excluded, preferred);
 
-    int window = AspirationWindow;
+    int window = AspirationWindow + m_scoreVolatility;
     int alpha = std::max(-Infinity, center - window);
     int beta = std::min(Infinity, center + window);
 

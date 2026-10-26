@@ -72,7 +72,8 @@ bool MoveGenerator::is_legal(const Board& board, move_t move) {
     MoveList moves;
     PromotionMode savedMode = m_promotionMode;
     m_promotionMode = PromotionMode::All;
-    generate_all_moves(moves, AllPieces);
+    uint8_t pieceMask = static_cast<uint8_t>(1 << static_cast<int>(Piece::type(board.get_square(Move::from(move)))));
+    generate_all_moves(moves, pieceMask);
     m_promotionMode = savedMode;
     return std::find(moves.begin(), moves.end(), move) != moves.end();
 }
@@ -99,6 +100,8 @@ bitboard_t MoveGenerator::enemy_piece_board(PieceType type) const {
 }
 
 void MoveGenerator::initialize(const Board& board, GenerationMode mode, bool oneMoveOnly) {
+    bool attacksReady = m_board != nullptr && m_positionKey == board.zobrist_key() &&
+        m_friendlyColour == board.move_colour() && m_positionPieces == board.piece_bitboards();
     m_board = &board;
     m_generationMode = mode;
     m_oneMoveOnly = oneMoveOnly;
@@ -113,12 +116,16 @@ void MoveGenerator::initialize(const Board& board, GenerationMode mode, bool one
     m_enemyPieces = board.colour_bitboards()[board.opponent_colour_index()];
     m_allPieces = board.all_pieces_bitboard();
 
-    m_moveMask = mode == GenerationMode::CapturesOnly ? m_enemyPieces :
+    m_moveMask = (mode == GenerationMode::CapturesOnly || mode == GenerationMode::Tactical) ? m_enemyPieces :
         mode == GenerationMode::QuietOnly ? ~m_allPieces : ~m_friendlyPieces;
 
     m_moveMask &= ~enemy_piece_board(PieceType::King);
 
-    calculate_attack_data();
+    if (!attacksReady) {
+        calculate_attack_data();
+        m_positionKey = board.zobrist_key();
+        m_positionPieces = board.piece_bitboards();
+    }
 }
 
 void MoveGenerator::calculate_attack_data() {
@@ -184,7 +191,7 @@ void MoveGenerator::generate_all_moves(MoveList& moves, uint8_t pieceMask) {
         generate_king_moves(moves);
         if (finished(moves)) return;
 
-        if (!in_check() && m_generationMode != GenerationMode::CapturesOnly)
+        if (!in_check() && m_generationMode != GenerationMode::CapturesOnly && m_generationMode != GenerationMode::Tactical)
             generate_castling_moves(moves);
         if (finished(moves)) return;
     }
@@ -322,6 +329,8 @@ void MoveGenerator::generate_pawn_moves(MoveList& moves) {
 
         square_t targetSquare = static_cast<square_t>(singleTarget);
         bitboard_t targetBit = Square::bitboard(targetSquare);
+
+        if (m_generationMode == GenerationMode::Tactical && Square::rank(targetSquare) != promotionRank) continue;
 
         if ((startBit & m_orthogonalPinRays) && !(targetBit & m_orthogonalPinRays)) continue;
 

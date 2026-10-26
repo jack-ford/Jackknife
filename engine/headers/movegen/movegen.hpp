@@ -10,7 +10,7 @@ namespace chess {
 
 class MoveGenerator {
     public:
-        enum class GenerationMode { All, CapturesOnly, QuietOnly };
+        enum class GenerationMode { All, CapturesOnly, QuietOnly, Tactical };
         enum class PromotionMode { All, QueenOnly, QueenAndKnight };
 
         enum PieceFilter : uint8_t {
@@ -61,6 +61,8 @@ class MoveGenerator {
         bitboard_t enemy_piece_board(PieceType type) const;
 
         const Board* m_board = nullptr;
+        uint64_t m_positionKey = 0;
+        std::array<bitboard_t, 14> m_positionPieces {};
         GenerationMode m_generationMode = GenerationMode::All;
         PromotionMode m_promotionMode = PromotionMode::All;
         bool m_oneMoveOnly = false;
