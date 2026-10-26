@@ -89,7 +89,91 @@ references. For an additional comparison against Casanchess's actual source,
 set `CHESS_CASANCHESS_REFERENCE` to its pinned checkout as described in
 `third_party/casanchess/README.md`.
 
-`Limits::softTime` optionally stops after a completed iteration, while `time` remains the hard budget. Clock allocation belongs to the calling application. Results expose selective depth and a ponder move from the completed PV; UCI formatting and pondering lifecycle also belong to the caller. `set_integrations` installs an optional tablebase callback while the search is idle and clears cached bounds. The callback returns `std::nullopt` for unsupported positions, or a side-to-move `TablebaseOutcome` that accounts for the fifty-move rule and repetition. Search uses wins/losses as bounds at non-PV nodes and excludes null-move subtrees. Syzygy file loading and probing are intentionally left to an external adapter; no tablebase backend is bundled.
+`Limits::softTime` stops after a completed iteration; `time` remains the hard budget.
+`search::Controller` adds allocation from a remaining clock, increment, moves to
+go, and overhead. It scales the soft budget with PV-prefix stability and score
+drops, caps spending at available time, and searches forced moves to depth one.
+Cancellation is forwarded through the controller. Clock checks occur every 256
+nodes, so the hard budget is a polling deadline, not a real-time guarantee.
+
+```cpp
+#include "search/controller.hpp"
+using namespace std::chrono_literals;
+search::Controller controller(32);
+search::Clock clock {60s, 1s, 20ms, 0}; // remaining, increment, overhead, moves to go
+search::Result result = controller.search(board, clock);
+```
+
+Move picking tries a validated hash move, non-losing tactical moves, quiet moves,
+then losing captures. Generation and SEE are delayed until needed; sparse
+positions reuse one legal-move list. Quiescence generates captures plus quiet
+promotions outside check, and all evasions in check. Stalemate detection remains
+active. Root moves retain scores and node effort between iterations/MultiPV
+passes; aspiration widths follow recent score volatility.
+
+TT entries are 16 bytes, with four entries in an asserted 64-byte cluster.
+Position and search-context keys use separate 32-bit fingerprints; as with other
+compact hash tables, collisions are possible. Legal hash moves are validated.
+`allocated_bytes()` reports the full requested MiB allocation, including sizes
+such as 3 MiB. Replacement generation uses a wrapping five-bit age.
+
+Continuation, countermove, capture, and pawn histories have individual opt-in
+option switches. Singular extensions, ProbCut, razoring, and correction history are
+implemented as opt-in `search::Options` switches. Regression tests cover their
+execution and legal PVs; these tests do not establish an Elo gain. Use benchmark
+and match testing to tune them for your workload.
+
+### Syzygy
+
+`search::Syzygy` bundles the MIT-licensed Fathom loader/prober at the revision in
+`third_party/fathom/README.md`. Supply your own `.rtbw` and `.rtbz` files:
+
+```cpp
+#include "search/syzygy.hpp"
+search::Syzygy tables("C:/chess/syzygy");
+controller.set_integrations(tables.integrations());
+```
+
+Check `max_pieces()` to see whether files were found (zero means none). Search
+WDL probes require no castling rights and a zero half-move clock. Root DTZ
+probing handles nonzero clocks, maps cursed wins/blessed losses to draws, and
+returns a legal WDL-preserving move. Roots with repetition history use normal
+search because DTZ does not encode that history. Missing files/unsupported
+positions fall back to search. Root probing is used for single-PV searches;
+MultiPV uses normal search with WDL probes. Mappings are shared and serialized;
+a different path requires releasing all clients/integration callbacks. The last
+mapping stays cached until replacement or process exit.
+
+### Optional assets
+
+Call `eval::nnue::load_network(path)` from `eval/nnue/network.hpp` before creating
+any board or accessing the network to use another network with the same binary
+architecture. Wrong-size/unreadable files are rejected transactionally. Once
+weights are first used they are frozen; replacing them would invalidate existing
+board accumulators. The embedded network remains the default.
+
+`search::OpeningBook` loads a native text book, with records of the form
+`full FEN | coordinate move | positive weight`. Blank lines and `#` comments are
+accepted. This is not a Polyglot binary reader. Loading validates every move and
+preserves the previous book on failure. `probe(board, choice)` selects by integer
+weight (supply random entropy as `choice` for randomized play). Repeated or
+terminal positions return no book move. Install it through
+`Integrations::probeBook`; callback ownership is the caller's responsibility:
+
+```cpp
+#include "search/opening_book.hpp"
+auto book = std::make_shared<search::OpeningBook>();
+book->load("opening-book.txt");
+auto integrations = tables.integrations();
+integrations.probeBook = [book](const chess::Board& position) {
+    return book->probe(position);
+};
+controller.set_integrations(std::move(integrations));
+```
+
+Book/tablebase hits return a one-move variation at depth zero; book scores are
+static evaluations, not searched scores. UCI, protocol parsing, and pondering
+lifecycle remain outside the engine library.
 
 ## Tests
 
@@ -101,3 +185,31 @@ ctest --test-dir build/windows -C Debug --output-on-failure
 ```
 
 Use `-DBUILD_TESTING=OFF` to omit test executables. For faster play, build with `cmake --build build/windows --config Release` and run `build/windows/Release/chess_gui.exe`.
+
+### Benchmarks and differential checks
+
+`chess_bench` reports CSV rows with depth, nodes, seconds, NPS, score, best move,
+and tactical pass/fail, followed by an aggregate row. It clears search state
+before each position. Optional suite files contain `full FEN | acceptable moves`
+(space-separated coordinate moves); omit `|` for positions without assertions.
+A failed tactical expectation returns a nonzero exit status.
+
+```powershell
+build/windows/Release/chess_bench.exe 7
+build/windows/Release/chess_bench.exe 7 tests/data/tactics.txt
+build/windows/Release/chess_bench.exe 7 - experimental
+```
+
+Tests include start-position perft through depth five (4,865,609 nodes), seeded
+legal-game walks comparing staged/tactical moves with full generation, SEE
+against a separate legal-board recapture reference, FEN and accumulator undo
+round trips, TT replacement/context/size checks, clock allocation/cancellation,
+real KQvK WDL/DTZ fixtures, opening-book reloads, and startup NNUE loading.
+
+A local Windows/MSVC 19.44 Release AVX2 comparison against commit `1c20d88`
+used the six built-in positions at depth 7 with a cleared 16 MiB hash, alternating
+three runs per version. Median elapsed time was 0.780 s before and 0.736 s after;
+aggregate NPS was 795,451 before and 844,404 after (about 6% higher). Total nodes
+were 620,494 and 621,482. These are local throughput measurements, not an Elo
+estimate or a guarantee for other positions/hardware. New history/pruning
+options were disabled for the default comparison.
