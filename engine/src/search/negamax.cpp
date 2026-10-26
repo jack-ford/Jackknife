@@ -1,6 +1,7 @@
 #include "search/search.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 
 namespace search {
@@ -28,9 +29,11 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
     ++m_nodes;
     m_selectiveDepth = std::max(m_selectiveDepth, ply);
 
-    MoveList moves = m_generator.generate_moves(board);
-
-    if (moves.is_empty())
+    MoveList legalMoves;
+    bool eagerMoves = std::popcount(board.all_pieces_bitboard()) <= EagerMovePieceLimit;
+    if (eagerMoves)
+        m_generator.generate_moves(board, legalMoves);
+    if (eagerMoves ? legalMoves.is_empty() : !m_generator.has_legal_moves(board))
         return inCheck ? -MateScore + ply : 0;
 
     if (is_draw(board, nullSearch))
@@ -64,8 +67,12 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
     uint64_t context = context_key(board, ply, extensions, recaptureSquare, nullSearch, allowNull);
 
     HashProbe probe = probe_hash(board, context, ply);
-    if (probe.move != 0 && std::find(moves.begin(), moves.end(), probe.move) == moves.end())
-        probe = {};
+    if (probe.move != 0) {
+        bool legalHash = eagerMoves ? std::find(legalMoves.begin(), legalMoves.end(), probe.move) != legalMoves.end() :
+            m_generator.is_legal(board, probe.move);
+        if (!legalHash)
+            probe = {};
+    }
 
     if (!pvNode && probe.can_cutoff(depth, alpha, beta)) {
         ++m_statistics.hashCutoffs;
@@ -78,7 +85,8 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
         ++m_statistics.internalReductions;
     }
 
-    int staticScore = probe.hit ? probe.staticScore : eval::evaluate(board);
+    int rawStaticScore = probe.hit ? probe.staticScore : eval::evaluate(board);
+    int staticScore = inCheck ? rawStaticScore : corrected_score(board, rawStaticScore);
     m_staticScores[ply] = inCheck ? Infinity : staticScore;
 
     bool improving = ply >= 2 && m_staticScores[ply - 2] != Infinity && staticScore > m_staticScores[ply - 2];
@@ -90,9 +98,27 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
     if (m_options.reverseFutilityPruning && canPrune && depth <= ReverseFutilityDepth && staticScore - ReverseFutilityMargin * depth >= beta) {
         ++m_statistics.reverseFutilityCutoffs;
 
-        store_hash(board, context, 0, staticScore, staticScore, depth, ply, originalAlpha, beta);
+        store_hash(board, context, 0, staticScore, rawStaticScore, depth, ply, originalAlpha, beta);
 
         return staticScore;
+    }
+
+    if (m_options.razoring && canPrune && depth <= RazorDepth &&
+        staticScore + RazorMargin * depth * depth <= alpha) {
+        int score = quiescence_search(board, alpha, alpha + 1, ply, nullSearch);
+        m_pvLength[ply] = ply;
+        if (m_stopped)
+            return 0;
+        if (score <= alpha) {
+            ++m_statistics.razorCutoffs;
+            return score;
+        }
+    }
+
+    if (m_options.probCut && canPrune && depth >= ProbCutDepth && beta + ProbCutMargin < MateThreshold) {
+        auto score = prob_cut(board, depth, beta, ply, extensions, nullSearch);
+        if (score)
+            return *score;
     }
 
     if (m_options.nullMovePruning && canPrune && allowNull && !nullSearch && depth >= NullMoveDepth && staticScore >= beta && has_null_material(board)) {
@@ -102,6 +128,8 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
         board.make_null_move();
 
         m_historyKeys[ply + 1] = 0;
+        m_previousMoves[ply + 1] = 0;
+        m_previousPieces[ply + 1] = 0;
 
         int score = -nega_max(board, depth - reduction - 1, -beta, -beta + 1,
             ply + 1, extensions, Square::None, false, true, false);
@@ -127,23 +155,25 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
             }
             if (score >= beta) {
                 ++m_statistics.nullCutoffs;
-                store_hash(board, context, 0, score, staticScore, depth, ply, originalAlpha, beta);
+                store_hash(board, context, 0, score, rawStaticScore, depth, ply, originalAlpha, beta);
 
                 return score;
             }
         }
     }
 
-    order_moves(board, moves, hashMove, ply);
+    MovePicker picker(board, hashMove, [&](move_t move) {
+        return is_quiet(board, move) ? quiet_score(board, move, ply) : capture_score(board, move);
+    }, false, &m_generator, eagerMoves ? &legalMoves : nullptr);
 
     int bestScore = -Infinity;
     move_t bestMove = 0;
     int searched = 0;
     MoveList quietMoves;
+    MoveList captures;
 
-    PieceColor color = board.move_colour();
-    for (int index = 0; index < moves.size(); ++index) {
-        move_t move = moves[index];
+    while (auto candidate = picker.next()) {
+        move_t move = candidate->move;
 
         bool quiet = is_quiet(board, move);
         bool capture = is_capture(board, move);
@@ -151,14 +181,42 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
 
         bool killer = m_options.killerMoves && (move == m_killers[ply][0] || move == m_killers[ply][1]);
 
-        int historyScore = m_options.historyHeuristic ? m_history[board.move_colour_index()][Move::from(move)][Move::to(move)] : 0;
-        int quality = quiet ? historyScore : m_exchangeScores[ply][index];
+        int historyScore = history_score(board, move, ply);
+        int quality = quiet ? historyScore : candidate->exchange;
         int margin = futility_margin(depth, quiet, quality);
 
         int extension = m_options.recaptureExtensions && !inCheck && capture && Move::to(move) == recaptureSquare &&
             extensions < MaxExtensions && depth <= RecaptureDepth ? 1 : 0;
 
         m_statistics.recaptureExtensions += extension;
+
+        if (m_options.singularExtensions && move == hashMove && depth >= SingularDepth &&
+            extensions + extension < MaxExtensions && probe.contextMatch && probe.depth >= depth - SingularDepthMargin &&
+            (probe.bound == Bound::Lower || probe.bound == Bound::Exact) && std::abs(probe.score) < MateThreshold) {
+            int singularBeta = probe.score - SingularMargin * depth;
+            bool singular = true;
+            auto alternatives = m_generator.generate_moves(board);
+            for (move_t alternative : alternatives) {
+                if (alternative == move)
+                    continue;
+                board.make_move(alternative, true);
+                advance_history(board, ply, alternative);
+                int score = -nega_max(board, depth / 2 - 1, -singularBeta, -singularBeta + 1,
+                    ply + 1, extensions, Square::None, false, nullSearch, false);
+                board.unmake_move(alternative, true);
+                if (m_stopped)
+                    return 0;
+                if (score >= singularBeta) {
+                    singular = false;
+                    break;
+                }
+            }
+            m_pvLength[ply] = ply;
+            if (singular) {
+                ++extension;
+                ++m_statistics.singularExtensions;
+            }
+        }
 
         board.make_move(move, true);
 
@@ -174,7 +232,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
             continue;
         }
 
-        advance_history(board, ply);
+        advance_history(board, ply, move);
         int nextDepth = depth - 1 + extension;
         square_t nextCapture = capture ? Move::to(move) : Square::None;
 
@@ -197,6 +255,8 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
 
         if (quiet)
             quietMoves.add(move);
+        else
+            captures.add(move);
 
         if (score > bestScore) {
             bestScore = score;
@@ -210,12 +270,18 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, int ply,
 
         if (score >= beta) {
             if (quiet)
-                reward_quiet(color, move, depth, ply, quietMoves);
+                reward_quiet(board, move, depth, ply, quietMoves);
+            else
+                reward_capture(board, move, depth, captures);
             break;
         }
     }
 
-    store_hash(board, context, bestMove, bestScore, staticScore, depth, ply, originalAlpha, beta);
+    if (m_options.correctionHistory && !inCheck && bestMove != 0 && is_quiet(board, bestMove) && std::abs(bestScore) < MateThreshold &&
+        !(bestScore >= beta && bestScore < staticScore) && !(bestScore <= originalAlpha && bestScore > staticScore))
+        update_correction(board, depth, bestScore, rawStaticScore);
+
+    store_hash(board, context, bestMove, bestScore, rawStaticScore, depth, ply, originalAlpha, beta);
     
     return bestScore;
 }

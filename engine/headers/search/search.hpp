@@ -13,6 +13,7 @@
 #include "utils/search_utility.hpp"
 #include "search/transposition_table.hpp"
 #include "eval/static_exchange.hpp"
+#include "search/move_picker.hpp"
 
 namespace search {
 
@@ -31,6 +32,14 @@ struct Options {
     bool killerMoves = true;
     bool seePruning = true;
     bool deltaPruning = true;
+    bool continuationHistory = false;
+    bool counterMoves = false;
+    bool captureHistory = false;
+    bool pawnHistory = false;
+    bool singularExtensions = false;
+    bool probCut = false;
+    bool razoring = false;
+    bool correctionHistory = false;
 };
 
 struct Statistics {
@@ -51,6 +60,14 @@ struct Statistics {
     uint64_t seePrunes = 0;
     uint64_t deltaPrunes = 0;
     uint64_t tablebaseHits = 0;
+    uint64_t singularExtensions = 0;
+    uint64_t probCutCutoffs = 0;
+    uint64_t razorCutoffs = 0;
+    uint64_t continuationUpdates = 0;
+    uint64_t pawnHistoryUpdates = 0;
+    uint64_t captureHistoryUpdates = 0;
+    uint64_t counterMoveUpdates = 0;
+    uint64_t correctionUpdates = 0;
 };
 
 struct Limits {
@@ -59,23 +76,27 @@ struct Limits {
     uint64_t nodes = 0;
     std::chrono::milliseconds time {1000};
     std::chrono::milliseconds softTime {0};
+
+    void validate() const;
 };
 
 enum class TablebaseOutcome { Loss, Draw, Win };
 
+struct TablebaseRoot {
+    TablebaseOutcome outcome;
+    chess::move_t move = 0;
+    int distanceToZero = 0;
+};
+
 struct Integrations {
     std::function<std::optional<TablebaseOutcome>(const chess::Board&)> probeTablebase;
+    std::function<std::optional<TablebaseRoot>(const chess::Board&)> probeRoot;
+    std::function<std::optional<chess::move_t>(const chess::Board&)> probeBook;
 };
 
 struct Variation {
     int score = 0;
     std::vector<chess::move_t> moves;
-};
-
-struct ScoredMove {
-    chess::move_t move;
-    int score;
-    int exchange;
 };
 
 struct Result {
@@ -111,12 +132,20 @@ class Search final {
             const std::vector<chess::move_t>& excluded, chess::move_t preferred);
         int nega_max(chess::Board& board, int depth, int alpha, int beta, int ply,
             int extensions, chess::square_t recaptureSquare, bool pvNode, bool nullSearch, bool allowNull = true);
+        std::optional<int> prob_cut(chess::Board& board, int depth, int beta, int ply, int extensions, bool nullSearch);
         int quiescence_search(chess::Board& board, int alpha, int beta, int ply, bool nullSearch);
-        void order_moves(const chess::Board& board, chess::MoveList& moves, chess::move_t hashMove, int ply);
+        int quiet_score(const chess::Board& board, chess::move_t move, int ply) const;
         void update_pv(int ply, chess::move_t move);
-        void reward_quiet(chess::PieceColor color, chess::move_t move, int depth, int ply,
+        void reward_quiet(const chess::Board& board, chess::move_t move, int depth, int ply,
             const chess::MoveList& quietMoves);
-        void advance_history(const chess::Board& board, int ply);
+        void advance_history(const chess::Board& board, int ply, chess::move_t move);
+        int history_score(const chess::Board& board, chess::move_t move, int ply) const;
+        std::size_t continuation_index(const chess::Board& board, chess::move_t move, int ply) const;
+        std::size_t pawn_index(const chess::Board& board, chess::move_t move) const;
+        int capture_score(const chess::Board& board, chess::move_t move) const;
+        void reward_capture(const chess::Board& board, chess::move_t move, int depth, const chess::MoveList& captures);
+        int corrected_score(const chess::Board& board, int score) const;
+        void update_correction(const chess::Board& board, int depth, int score, int staticScore);
         uint64_t context_key(const chess::Board& board, int ply, int extensions,
             chess::square_t recaptureSquare, bool nullSearch, bool allowNull = true) const;
         HashProbe probe_hash(const chess::Board& board, uint64_t context, int ply);
@@ -126,16 +155,30 @@ class Search final {
         int late_reduction(int depth, int searched, int quality, bool pvNode, bool improving,
             int evaluationDelta, bool quiet) const;
 
+        struct RootMove {
+            chess::move_t move;
+            int score = -Infinity;
+            uint64_t nodes = 0;
+        };
+        std::vector<RootMove> m_rootMoves;
+        int m_scoreVolatility = 0;
         TranspositionTable m_hash;
         Options m_options;
         Integrations m_integrations;
         Statistics m_statistics;
         std::array<uint64_t, MaxPly> m_historyKeys {};
         std::array<int, MaxPly> m_staticScores {};
-        std::array<std::array<int, chess::MaxMoves>, MaxPly> m_exchangeScores {};
         std::array<std::array<int, chess::MaxMoves + 1>, MaxPly> m_reductions {};
         std::array<std::array<std::array<int, 64>, 64>, 2> m_history {};
         std::array<std::array<chess::move_t, 2>, MaxPly> m_killers {};
+        std::vector<int> m_continuationHistory = std::vector<int>(HistoryTableSize);
+        std::vector<int> m_pawnHistory = std::vector<int>(HistoryTableSize);
+        std::array<std::array<std::array<int, 7>, 64>, 14> m_captureHistory {};
+        std::array<std::array<chess::move_t, 64>, 14> m_counterMoves {};
+        std::array<chess::move_t, MaxPly> m_previousMoves {};
+        std::array<chess::piece_t, MaxPly> m_previousPieces {};
+        std::array<std::vector<int>, 2> m_correctionHistory {
+            std::vector<int>(HistoryTableSize), std::vector<int>(HistoryTableSize)};
         std::array<std::array<chess::move_t, MaxPly>, MaxPly> m_pv {};
         std::array<int, MaxPly> m_pvLength {};
         chess::MoveGenerator m_generator;

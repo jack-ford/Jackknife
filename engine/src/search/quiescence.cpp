@@ -1,6 +1,7 @@
 #include "search/search.hpp"
 
 #include <algorithm>
+#include <bit>
 
 namespace search {
 
@@ -15,10 +16,13 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
     m_nodes++;
     m_selectiveDepth = std::max(m_selectiveDepth, ply);
 
-    MoveList moves = m_generator.generate_moves(board);
+    MoveList legalMoves;
+    bool eagerMoves = std::popcount(board.all_pieces_bitboard()) <= EagerMovePieceLimit;
+    if (eagerMoves)
+        m_generator.generate_moves(board, legalMoves);
+    bool hasMoves = eagerMoves ? !legalMoves.is_empty() : m_generator.has_legal_moves(board);
     bool inCheck = m_generator.in_check();
-
-    if (moves.is_empty())
+    if (!hasMoves)
         return inCheck ? -MateScore + ply : 0;
 
     if (is_draw(board, nullSearch))
@@ -31,8 +35,12 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
     uint64_t context = context_key(board, ply, 0, Square::None, nullSearch);
 
     HashProbe probe = probe_hash(board, context, ply);
-    if (probe.move != 0 && std::find(moves.begin(), moves.end(), probe.move) == moves.end())
-        probe = {};
+    if (probe.move != 0) {
+        bool legalHash = eagerMoves ? std::find(legalMoves.begin(), legalMoves.end(), probe.move) != legalMoves.end() :
+            m_generator.is_legal(board, probe.move);
+        if (!legalHash)
+            probe = {};
+    }
 
     if (beta - alpha == 1 && probe.depth == 0 && probe.can_cutoff(0, alpha, beta)) {
         ++m_statistics.hashCutoffs;
@@ -50,23 +58,18 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
         }
 
         alpha = std::max(alpha, bestScore);
-        int count = 0;
-        for (move_t move : moves) {
-            if (!is_quiet(board, move))
-                moves[count++] = move;
-        }
-
-        moves.count = count;
     }
 
-    order_moves(board, moves, probe.move, ply);
-    for (int index = 0; index < moves.size(); ++index) {
-
-        move_t move = moves[index];
+    move_t hashMove = !inCheck && probe.move != 0 && is_quiet(board, probe.move) ? 0 : probe.move;
+    MovePicker picker(board, hashMove, [&](move_t move) {
+        return is_quiet(board, move) ? quiet_score(board, move, ply) : capture_score(board, move);
+    }, !inCheck, &m_generator, eagerMoves ? &legalMoves : nullptr);
+    while (auto candidate = picker.next()) {
+        move_t move = candidate->move;
         bool canPrune = !inCheck && Move::type(move) != Move::Type::Promotion &&
             alpha > -MateThreshold && alpha < MateThreshold && board.fifty_move_counter() < 90;
 
-        bool losing = m_options.seePruning && m_exchangeScores[ply][index] < 0;
+        bool losing = m_options.seePruning && candidate->exchange < 0;
         PieceType victim = Move::type(move) == Move::Type::EnPassant ? PieceType::Pawn :
             Piece::type(board.get_square(Move::to(move)));
 
@@ -82,7 +85,7 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
             continue;
         }
 
-        advance_history(board, ply);
+        advance_history(board, ply, move);
         int score = -quiescence_search(board, -beta, -alpha, ply + 1, nullSearch);
         board.unmake_move(move, true);
 
