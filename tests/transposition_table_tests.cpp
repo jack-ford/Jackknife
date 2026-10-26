@@ -11,6 +11,11 @@ void require(bool condition, const char* message) {
 }
 
 void test_table() {
+    search::TranspositionTable oddSize(3);
+    require(oddSize.allocated_bytes() == 3 * search::BytesPerMegabyte, "non-power-of-two allocation truncated");
+    require(oddSize.capacity() == oddSize.allocated_bytes() / 16, "compact entry capacity");
+    oddSize.store(0xffffffffffffffffULL, 0xabcdef1234567890ULL, 123, 42, 12, 8, 0, search::Bound::Exact);
+    require(oddSize.probe(0xffffffffffffffffULL, 0xabcdef1234567890ULL, 0).contextMatch, "arbitrary-size indexing");
     search::TranspositionTable table(1);
     require(table.capacity() > 0, "empty table allocation");
     require(!table.probe(0, 0, 0).hit, "empty table matched zero key");
