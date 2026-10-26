@@ -541,7 +541,7 @@ int main(int, char**) {
     SDL_SetRenderVSync(renderer, 1);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    std::string spritePath = std::string(SDL_GetBasePath()) + "chess_pieces.png";
+    std::string spritePath = std::string(SDL_GetBasePath()) + "data/chess_pieces.png";
     SpriteSheet sprites = {IMG_LoadTexture(renderer, spritePath.c_str()), 0, 0};
 
     if (sprites.texture == nullptr) {

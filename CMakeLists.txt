@@ -78,9 +78,11 @@ if(CHESS_BUILD_GUI)
     target_link_libraries(chess_gui PRIVATE chess_engine SDL3::SDL3 SDL3_image::SDL3_image)
 
     add_custom_command(TARGET chess_gui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:chess_gui>/data"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/gui/chess_pieces.png"
-            "$<TARGET_FILE_DIR:chess_gui>/chess_pieces.png"
+            "${CMAKE_CURRENT_SOURCE_DIR}/data/chess_pieces.png"
+            "$<TARGET_FILE_DIR:chess_gui>/data/chess_pieces.png"
     )
 endif()
 
