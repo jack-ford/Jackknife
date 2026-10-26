@@ -32,26 +32,37 @@ class TranspositionTable final {
         void store(uint64_t key, uint64_t context, chess::move_t move, int score,
             int staticScore, int depth, int ply, Bound bound, bool pvNode = false);
         std::size_t capacity() const;
+        std::size_t allocated_bytes() const;
         static int score_to_table(int score, int ply);
         static int score_from_table(int score, int ply);
 
     private:
         struct Entry {
-            uint64_t key = 0;
-            uint64_t context = 0;
+            uint32_t key = 0;
+            uint32_t context = 0;
             int16_t score = 0;
             int16_t staticScore = 0;
-            int16_t depth = -1;
             chess::move_t move = 0;
-            uint8_t generation = 0;
-            Bound bound = Bound::None;
-            bool wasPv = false;
+            uint8_t depth = 0;
+            uint8_t metadata = 0;
+
+            Bound bound() const { return static_cast<Bound>(metadata & 3); }
+            bool was_pv() const { return (metadata & 4) != 0; }
+            uint8_t generation() const { return metadata >> 3; }
+            void refresh(uint8_t generation, bool pvNode) {
+                metadata = static_cast<uint8_t>((generation << 3) | (pvNode ? 4 : 0) | static_cast<uint8_t>(bound()));
+            }
         };
 
         struct alignas(CacheLineSize) Cluster {
             std::array<Entry, HashClusterSize> entries;
         };
 
+        static_assert(sizeof(Entry) == 16);
+        static_assert(sizeof(Cluster) == CacheLineSize);
+
+        std::size_t cluster_index(uint64_t key) const;
+        std::size_t m_indexMask = 0;
         int replacement_quality(const Entry& entry) const;
         std::vector<Cluster> m_clusters;
         uint8_t m_generation = 0;
