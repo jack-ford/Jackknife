@@ -10,7 +10,7 @@ Install Visual Studio 2022 with the Desktop development with C++ workload, CMake
 .\scripts\setup.ps1
 ```
 
-For later builds in a new terminal, set `$env:VCPKG_ROOT = "$PWD\.vcpkg"` and run `cmake --build --preset windows`.
+For later builds in a new terminal, run `cmake --preset windows` and then `cmake --build --preset windows`. The preset uses the repository's `.vcpkg` directory directly; no `VCPKG_ROOT` environment variable is required.
 
 The GUI executable is created at `build/windows/Debug/chess_gui.exe`. Click or drag a piece to make a legal move. Choose a promotion piece from the panel beside the board. You play White against the engine by default; the engine searches in the background with a one-second move budget.
 
@@ -55,7 +55,39 @@ A zero time or node budget disables that limit; depth must be between 1 and 127.
 
 The fail-soft search implements iterative deepening, root search, negamax, quiescence, asymmetric aspiration windows, PVS, verified null-move pruning, reverse futility pruning, move-quality futility pruning, check and recapture extensions, IIR, LMR, history, killers, and MultiPV. Aspiration and PVS have separate implementations. SEE uses local bitboards, checks pinned attackers and king captures, and handles en passant and promotions. Capture ordering separates winning and losing exchanges; quiescence supports SEE and delta pruning with checks and promotions protected. LMR uses history or exchange quality, static evaluation, improving status, and PV provenance.
 
-The clustered transposition table stores exact, lower, and upper bounds, static evaluations, depth, moves, generation, and PV provenance. Mate scores are normalized by ply; context keys isolate repetition history, the fifty-move clock, and extension/null-verification state. The evaluator lives in `engine/src/eval/evaluation.cpp` and deliberately uses only material (pawn 100, knight 320, bishop 330, rook 500, queen 900). Selective pruning is heuristic; this is not an exhaustive proof search.
+The clustered transposition table stores exact, lower, and upper bounds, static evaluations, depth, moves, generation, and PV provenance. Mate scores are normalized by ply; context keys isolate repetition history, the fifty-move clock, and extension/null-verification state. The evaluator uses Casanchess's pretrained NNUE network. Piece values (pawn 100, knight 320, bishop 330, rook 500, queen 900) remain available for SEE and move ordering. Selective pruning is heuristic; this is not an exhaustive proof search.
+
+## NNUE evaluation
+
+The bundled `data/network-20260910.nnue` is embedded in the engine library at build
+time, with its SHA-256 checked during configuration. No runtime network path or
+download is needed. Attribution, source commit, and license are in
+`third_party/casanchess/`.
+
+`eval::evaluate(board)` returns the objective NNUE score in centipawns from the
+side to move. Both perspectives are maintained incrementally through normal
+moves, captures, all promotions, en passant, and castling. Only a king moving to
+a different feature bucket rebuilds that king's perspective. Board history
+restores accumulators on undo; null moves change perspective without changing
+piece features. Board copies own independent accumulators and history, while
+weights are immutable and shared across threads.
+
+The implementation is split into feature/layout definitions under
+`engine/headers/eval/nnue/`, move updates and inference in
+`engine/src/eval/nnue.cpp`, and SIMD kernels/network storage under
+`engine/src/eval/nnue/`. `eval::nnue::evaluate_outputs` additionally exposes the
+network's signed drawishness residual; search uses the objective score without
+Casanchess's optional Ambition adjustment.
+
+AVX2 kernels are enabled by default and require an AVX2-capable CPU. Configure
+with `-DCHESS_NNUE_AVX2=OFF` for the portable scalar kernels; both paths use the
+same incremental updates and exact integer arithmetic. Build Release for play.
+
+NNUE tests compare incremental accumulators with full refreshes after make/undo,
+exercise special/null moves and copies, and compare SIMD arithmetic with scalar
+references. For an additional comparison against Casanchess's actual source,
+set `CHESS_CASANCHESS_REFERENCE` to its pinned checkout as described in
+`third_party/casanchess/README.md`.
 
 `Limits::softTime` optionally stops after a completed iteration, while `time` remains the hard budget. Clock allocation belongs to the calling application. Results expose selective depth and a ponder move from the completed PV; UCI formatting and pondering lifecycle also belong to the caller. `set_integrations` installs an optional tablebase callback while the search is idle and clears cached bounds. The callback returns `std::nullopt` for unsupported positions, or a side-to-move `TablebaseOutcome` that accounts for the fifty-move rule and repetition. Search uses wins/losses as bounds at non-PV nodes and excludes null-move subtrees. Syzygy file loading and probing are intentionally left to an external adapter; no tablebase backend is bundled.
 

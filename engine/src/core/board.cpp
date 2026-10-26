@@ -8,6 +8,7 @@
 #include "movegen/movegen.hpp"
 #include "utils/fen_utility.hpp"
 #include "core/zobrist.hpp"
+#include "eval/nnue/nnue.hpp"
 
 namespace chess {
 
@@ -62,7 +63,8 @@ void Board::make_move(move_t move, bool inSearch) {
            targetSquare == m_currentGameState.enPassantSquare &&
            Piece::type(capturedPiece) == PieceType::Pawn && Piece::is_empty(m_squares[targetSquare])));
 
-    m_gameStateHistory.push_back({ m_currentGameState, move, m_repetitionStart, inSearch, false });
+    auto nnueChanges = eval::nnue::describe_move(*this, move);
+    m_gameStateHistory.push_back({ m_currentGameState, move, m_repetitionStart, inSearch, false, m_accumulator });
 
     uint64_t newZobristKey = m_currentGameState.zobristKey;
     uint8_t prevCastleState = m_currentGameState.castlingRights;
@@ -134,6 +136,7 @@ void Board::make_move(move_t move, bool inSearch) {
     m_hasCachedInCheckValue = false;
 
     update_en_passant_hash();
+    eval::nnue::update(m_accumulator, *this, nnueChanges);
     if (movedPieceType == PieceType::Pawn || !Piece::is_empty(capturedPiece) ||
         prevCastleState != m_currentGameState.castlingRights)
         m_repetitionStart = m_repetitionPositionHistory.size();
@@ -145,7 +148,7 @@ void Board::make_move(move_t move, bool inSearch) {
 
 void Board::unmake_move(move_t move, bool inSearch) {
     assert(!m_gameStateHistory.empty());
-    const HistoryEntry previous = m_gameStateHistory.back();
+    const HistoryEntry& previous = m_gameStateHistory.back();
     assert(!previous.isNullMove && previous.move == move && previous.inSearch == inSearch);
 
     m_isWhiteToMove = !m_isWhiteToMove;
@@ -186,10 +189,11 @@ void Board::unmake_move(move_t move, bool inSearch) {
     }
 
     m_currentGameState = previous.gameState;
+    m_accumulator = previous.accumulator;
+    m_repetitionStart = previous.repetitionStart;
     m_gameStateHistory.pop_back();
     assert(!m_repetitionPositionHistory.empty());
     m_repetitionPositionHistory.pop_back();
-    m_repetitionStart = previous.repetitionStart;
     if (!inSearch) {
         assert(!m_allGameMoves.empty());
         m_allGameMoves.pop_back();
@@ -208,7 +212,7 @@ void Board::make_null_move() {
     assert(!is_in_check());
     assert(m_plyCount < std::numeric_limits<int>::max());
 
-    m_gameStateHistory.push_back({ m_currentGameState, 0, m_repetitionStart, true, true });
+    m_gameStateHistory.push_back({ m_currentGameState, 0, m_repetitionStart, true, true, m_accumulator });
     // A null position is not a real occurrence; descendants cannot match its ancestors.
     m_repetitionStart = m_repetitionPositionHistory.size();
     m_currentGameState.zobristKey ^= Zobrist::side_to_move();
@@ -232,6 +236,7 @@ void Board::unmake_null_move() {
 
     m_repetitionStart = m_gameStateHistory.back().repetitionStart;
     m_currentGameState = m_gameStateHistory.back().gameState;
+    m_accumulator = m_gameStateHistory.back().accumulator;
     m_gameStateHistory.pop_back();
 
     m_isWhiteToMove = !m_isWhiteToMove;
@@ -369,6 +374,7 @@ void Board::load_validated_position(const FenUtility::PositionInfo& positionInfo
 
     m_currentGameState.zobristKey ^= Zobrist::castling(m_currentGameState.castlingRights);
     m_repetitionPositionHistory.push_back(m_currentGameState.zobristKey);
+    eval::nnue::refresh(m_accumulator, *this);
 }
 
 void Board::update_en_passant_hash() {

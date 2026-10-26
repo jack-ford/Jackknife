@@ -3,12 +3,30 @@ cmake_minimum_required(VERSION 3.24)
 project(ChessEngineV2 VERSION 0.1.0 LANGUAGES CXX)
 
 option(CHESS_BUILD_GUI "Build the SDL3 desktop GUI" ON)
+option(CHESS_NNUE_AVX2 "Use AVX2 NNUE kernels (requires an AVX2-capable CPU)" ON)
+
+set(NNUE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/data/network-20260910.nnue")
+file(SHA256 "${NNUE_FILE}" NNUE_HASH)
+if(NOT NNUE_HASH STREQUAL "b17d5a73bb312345c442c72d7f87474cfa3b20e9c42889efc8184b17c211560f")
+    message(FATAL_ERROR "Casanchess NNUE asset checksum mismatch")
+endif()
+set(NNUE_EMBEDDED "${CMAKE_CURRENT_BINARY_DIR}/nnue_embedded.cpp")
+add_custom_command(
+    OUTPUT "${NNUE_EMBEDDED}"
+    COMMAND "${CMAKE_COMMAND}" "-DINPUT=${NNUE_FILE}" "-DOUTPUT=${NNUE_EMBEDDED}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedNetwork.cmake"
+    DEPENDS "${NNUE_FILE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedNetwork.cmake"
+    VERBATIM
+)
 
 add_library(chess_engine
     engine/src/core/board.cpp
     engine/src/utils/fen_utility.cpp
     engine/src/utils/result_utility.cpp
-    engine/src/eval/nnue.cpp
+    engine/src/eval/nnue/nnue.cpp
+    engine/src/eval/nnue/kernels.cpp
+    engine/src/eval/nnue/network.cpp
+    "${NNUE_EMBEDDED}"
     engine/src/eval/evaluation.cpp
     engine/src/search/pvs.cpp
     engine/src/search/aspiration.cpp
@@ -32,6 +50,16 @@ target_include_directories(chess_engine
         "${CMAKE_CURRENT_SOURCE_DIR}/engine/headers"
 )
 target_compile_features(chess_engine PUBLIC cxx_std_20)
+
+if(CHESS_NNUE_AVX2)
+    if(MSVC)
+        set_source_files_properties(engine/src/eval/nnue/kernels.cpp PROPERTIES COMPILE_OPTIONS /arch:AVX2)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i.86)$")
+        set_source_files_properties(engine/src/eval/nnue/kernels.cpp PROPERTIES COMPILE_OPTIONS -mavx2)
+    else()
+        message(FATAL_ERROR "AVX2 is unavailable on this target; configure with -DCHESS_NNUE_AVX2=OFF")
+    endif()
+endif()
 
 add_executable(chess_cli
     cli/main.cpp
@@ -58,6 +86,36 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nnue_tests tests/nnue_tests.cpp)
+    target_link_libraries(nnue_tests PRIVATE chess_engine)
+    add_test(NAME nnue_incremental COMMAND nnue_tests)
+
+    set(CHESS_CASANCHESS_REFERENCE "" CACHE PATH "Optional Casanchess checkout for differential NNUE tests")
+    if(CHESS_CASANCHESS_REFERENCE)
+        add_executable(nnue_reference_tests tests/nnue_tests.cpp tests/nnue_reference.cpp
+            "${CHESS_CASANCHESS_REFERENCE}/src/NNUE.cpp")
+        set(REFERENCE_INCLUDE "${CHESS_CASANCHESS_REFERENCE}/include")
+        if(MSVC)
+            # MSVC 19.44 rejects upstream's constexpr score helpers calling abs.
+            # Shadow only the headers, replacing that expression equivalently.
+            # The NNUE.cpp being tested remains the original upstream source.
+            set(REFERENCE_INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/casanchess_headers")
+            file(MAKE_DIRECTORY "${REFERENCE_INCLUDE}")
+            foreach(header NNUE.h NNUE_Architecture.h BitboardUtils.h Constants.h)
+                file(READ "${CHESS_CASANCHESS_REFERENCE}/include/${header}" content)
+                if(header STREQUAL "Constants.h")
+                    string(REPLACE "abs(score)" "(score < 0 ? -score : score)" content "${content}")
+                endif()
+                file(WRITE "${REFERENCE_INCLUDE}/${header}" "${content}")
+            endforeach()
+        endif()
+        target_include_directories(nnue_reference_tests PRIVATE "${REFERENCE_INCLUDE}")
+        target_compile_features(nnue_reference_tests PRIVATE cxx_std_23)
+        target_compile_definitions(nnue_reference_tests PRIVATE CHESS_NNUE_REFERENCE
+            NNUE_FILENAME="${NNUE_FILE}")
+        target_link_libraries(nnue_reference_tests PRIVATE chess_engine)
+        add_test(NAME nnue_casanchess_parity COMMAND nnue_reference_tests)
+    endif()
     add_executable(board_tests tests/board/board_tests.cpp)
     target_link_libraries(board_tests PRIVATE chess_engine)
     add_test(NAME board_state_transitions COMMAND board_tests)

@@ -80,7 +80,7 @@ void test_exact_search() {
         auto expected = uncached->iterative_deepening(board, limits);
         auto result = cached->iterative_deepening(board, limits);
         require(result.score == expected.score, "TT crossed fifty-move histories");
-        require(result.score == (clock == 0 ? 500 : 0), "fifty-move test did not distinguish histories");
+        require(clock == 0 ? result.score > 0 : result.score == 0, "fifty-move test did not distinguish histories");
     }
     Board history;
     for (auto [from, to] : {std::pair{6, 21}, {62, 45}, {21, 6}, {45, 62}})

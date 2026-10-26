@@ -13,6 +13,7 @@
 #include "move.hpp"
 #include "piece.hpp"
 #include "square.hpp"
+#include "eval/nnue/architecture.hpp"
 #include "utils/fen_utility.hpp"
 #include "utils/result_utility.hpp"
 
@@ -57,6 +58,7 @@ struct HistoryEntry {
     std::size_t repetitionStart = 0;
     bool inSearch = false;
     bool isNullMove = false;
+    eval::nnue::Accumulator accumulator;
 };
 
 class Board final {
@@ -124,6 +126,7 @@ class Board final {
         std::span<const move_t> all_game_moves() const;
         std::string current_fen() const;
         const std::string& game_start_fen() const;
+        const eval::nnue::Accumulator& nnue_accumulator() const { return m_accumulator; }
 
         friend std::ostream& operator<<(std::ostream& output, const Board& board);
         friend bool FenUtility::en_passant_can_be_captured(const Board& board);
@@ -160,6 +163,7 @@ class Board final {
         bool m_isWhiteToMove = true;
         int m_plyCount = 0;
         GameState m_currentGameState;
+        eval::nnue::Accumulator m_accumulator;
         std::vector<HistoryEntry> m_gameStateHistory;
         std::vector<uint64_t> m_repetitionPositionHistory;
         // Retain the inactive prefix so undoing a capture/pawn move restores history.

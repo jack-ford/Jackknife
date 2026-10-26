@@ -1,4 +1,5 @@
 #include "eval/evaluation.hpp"
+#include "eval/nnue/nnue.hpp"
 
 namespace eval {
 
@@ -9,14 +10,7 @@ int piece_value(PieceType type) {
 }
 
 int evaluate(const Board& board) {
-    int score = 0;
-    const auto& pieces = board.piece_bitboards();
-    for (int type = static_cast<int>(PieceType::Pawn); type <= static_cast<int>(PieceType::Queen); ++type) {
-        int whiteCount = Bitboard::count(pieces[Piece::create(static_cast<PieceType>(type), PieceColor::White)]);
-        int blackCount = Bitboard::count(pieces[Piece::create(static_cast<PieceType>(type), PieceColor::Black)]);
-        score += PieceValues[type] * (whiteCount - blackCount);
-    }
-    return board.is_white_to_move() ? score : -score;
+    return nnue::evaluate(board.nnue_accumulator(), board.move_colour());
 }
 
 }
