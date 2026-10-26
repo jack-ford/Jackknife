@@ -14,27 +14,24 @@ void adjust_history(int& value, int bonus) {
 int Search::futility_margin(int depth, bool quiet, int quality) const {
     if (quiet)
         return depth * std::max(0, FutilityMargin + quality / HistoryReductionScale);
+
     if (quality < 0)
         return depth * std::max(0, FutilityCaptureMargin + quality / 8);
+
     return Infinity;
 }
 
-int Search::late_reduction(int depth, int searched, int quality, bool pvNode, bool improving,
-    int evaluationDelta, bool quiet) const {
+int Search::late_reduction(int depth, int searched, int quality, bool pvNode, bool improving, int evaluationDelta, bool quiet) const {
     int reduction = m_reductions[std::min(depth, MaxPly - 1)][searched + 1];
     reduction -= pvNode ? 1 : 0;
     reduction -= improving ? 1 : 0;
     reduction -= quality / (quiet ? HistoryReductionScale : ExchangeReductionScale);
     reduction -= std::clamp(evaluationDelta, -EvaluationReductionScale, EvaluationReductionScale) / EvaluationReductionScale;
+
     return std::clamp(reduction, 0, std::min(MaxLateReduction, depth - 2));
 }
 
 void Search::order_moves(const Board& board, MoveList& moves, move_t hashMove, int ply) {
-    struct ScoredMove {
-        move_t move;
-        int score;
-        int exchange;
-    };
     std::array<ScoredMove, MaxMoves> ordered;
     for (int index = 0; index < moves.size(); ++index) {
         move_t move = moves[index];

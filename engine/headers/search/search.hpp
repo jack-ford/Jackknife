@@ -64,13 +64,18 @@ struct Limits {
 enum class TablebaseOutcome { Loss, Draw, Win };
 
 struct Integrations {
-    // Return only rule-50-aware results; null positions are never probed.
     std::function<std::optional<TablebaseOutcome>(const chess::Board&)> probeTablebase;
 };
 
 struct Variation {
     int score = 0;
     std::vector<chess::move_t> moves;
+};
+
+struct ScoredMove {
+    move_t move;
+    int score;
+    int exchange;
 };
 
 struct Result {
@@ -86,7 +91,6 @@ struct Result {
     std::vector<Variation> variations;
 };
 
-// One search at a time per instance; cancellation uses the supplied stop token.
 class Search final {
     public:
         explicit Search(std::size_t hashMegabytes = DefaultHashMegabytes, const Options& options = {});

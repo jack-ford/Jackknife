@@ -35,29 +35,37 @@ bitboard_t ExchangePosition::attackers(square_t square, PieceColor color) const 
 int ExchangePosition::score(move_t move, PieceColor color) {
     if (Move::type(move) == Move::Type::Castling)
         return 0;
+
     square_t from = Move::from(move);
     square_t target = Move::to(move);
     square_t victimSquare = Move::type(move) == Move::Type::EnPassant ? Square::ep_square(target) : target;
     piece_t moving = 0;
     piece_t victim = 0;
+
     for (piece_t piece = 2; piece < m_pieces.size(); ++piece) {
         if (m_pieces[piece] & Square::bitboard(from))
             moving = piece;
         if (m_pieces[piece] & Square::bitboard(victimSquare))
             victim = piece;
     }
+
     std::array<int, Square::Count> gains {};
     gains[0] = eval::piece_value(Piece::type(victim));
+
     remove(moving, from);
+
     if (victim != 0)
         remove(victim, victimSquare);
+
     if (Move::type(move) == Move::Type::Promotion) {
         moving = Piece::create(Move::promotion_piece(move), color);
         gains[0] += eval::piece_value(Piece::type(moving)) - eval::piece_value(PieceType::Pawn);
     }
     place(moving, target);
+
     if (Piece::type(moving) == PieceType::King)
         m_kings[static_cast<int>(color)] = target;
+
     int depth = 0;
     while (Piece::type(moving) != PieceType::King && depth < Square::Count - 1) {
         color = static_cast<PieceColor>(!static_cast<bool>(color));
@@ -67,39 +75,50 @@ int ExchangePosition::score(move_t move, PieceColor color) {
         for (PieceType type : ExchangeOrder) {
             piece_t piece = Piece::create(type, color);
             bitboard_t origins = candidates & m_pieces[piece];
+
             while (origins != 0) {
                 square_t origin = Bitboard::pop(origins);
                 piece_t promoted = type == PieceType::Pawn && (Square::rank(target) == 0 || Square::rank(target) == 7)
                     ? Piece::create(PieceType::Queen, color) : piece;
+
                 square_t king = m_kings[static_cast<int>(color)];
                 remove(moving, target);
                 remove(piece, origin);
                 place(promoted, target);
+
                 if (type == PieceType::King)
                     m_kings[static_cast<int>(color)] = target;
+
                 if (attackers(m_kings[static_cast<int>(color)], opponent) == 0) {
-                    ++depth;
+                    depth++;
+
                     gains[depth] = eval::piece_value(Piece::type(moving)) - gains[depth - 1] +
                         eval::piece_value(Piece::type(promoted)) - eval::piece_value(type);
+
                     moving = promoted;
                     found = true;
+
                     break;
                 }
+
                 m_kings[static_cast<int>(color)] = king;
                 remove(promoted, target);
                 place(piece, origin);
                 place(moving, target);
             }
+
             if (found)
                 break;
         }
         if (!found)
             break;
     }
+
     while (depth > 0) {
         gains[depth - 1] = std::min(gains[depth - 1], -gains[depth]);
-        --depth;
+        depth--;
     }
+
     return gains[0];
 }
 
