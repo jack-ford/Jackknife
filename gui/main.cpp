@@ -1,48 +1,24 @@
 #include <array>
 #include <cmath>
+#include <algorithm>
+#include <chrono>
+#include <future>
+#include <memory>
+#include <mutex>
+#include <stop_token>
 #include <string>
 
+#include "constants.hpp"
 #include "core/board.hpp"
 #include "movegen/movegen.hpp"
+#include "search/search.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
 
 using namespace chess;
 
-namespace {
-
-constexpr int WindowWidth = 1920;
-constexpr int WindowHeight = 1080;
-constexpr float Scale = WindowWidth / 1280.0f;
-constexpr float SquareSize = 88.0f * Scale;
-constexpr float PieceSize = 88.0f * Scale;
-constexpr float BoardSize = SquareSize * 8.0f;
-constexpr float BoardX = (WindowWidth - BoardSize) / 2.0f;
-constexpr float BoardY = (WindowHeight - BoardSize) / 2.0f;
-constexpr float DragDistance = 5.0f * Scale;
-constexpr float PromotionSize = 104.0f * Scale;
-constexpr float PromotionGap = 8.0f * Scale;
-constexpr float PromotionX = BoardX + BoardSize + (WindowWidth - BoardX - BoardSize - PromotionSize) / 2.0f;
-constexpr float PromotionY = (WindowHeight - PromotionSize * 4.0f - PromotionGap * 3.0f) / 2.0f;
-
-constexpr SDL_Color Background = {255, 255, 255, 255};
-constexpr SDL_Color LightSquare = {240, 217, 181, 255};
-constexpr SDL_Color DarkSquare = {181, 136, 99, 255};
-constexpr SDL_Color SelectedSquare = {246, 246, 105, 255};
-constexpr SDL_Color LastMoveLight = {205, 210, 106, 255};
-constexpr SDL_Color LastMoveDark = {170, 162, 86, 255};
-constexpr SDL_Color CheckSquare = {220, 82, 82, 255};
-constexpr SDL_Color LegalMove = {45, 55, 45, 105};
-constexpr SDL_Color PromotionBackground = {225, 225, 225, 255};
-constexpr SDL_Color PromotionBorder = {75, 75, 75, 255};
-
-constexpr std::array<PieceType, 4> PromotionPieces = {
-    PieceType::Queen,
-    PieceType::Rook,
-    PieceType::Bishop,
-    PieceType::Knight
-};
+namespace gui {
 
 struct Position {
     float x;
@@ -60,6 +36,162 @@ struct PendingPromotion {
     PieceColor color = PieceColor::White;
     bool active = false;
 };
+
+class EnginePlayer final {
+    public:
+        ~EnginePlayer() {
+            cancel();
+        }
+
+        void start(const Board& board, const search::Limits& limits) {
+            m_stopSource = std::stop_source {};
+            {
+                std::lock_guard lock(m_mutex);
+                m_progress = {};
+            }
+            m_future = std::async(std::launch::async, [this, board, limits] {
+                return m_search->iterative_deepening(board, limits, m_stopSource.get_token(),
+                    [this](const search::Result& result) {
+                        std::lock_guard lock(m_mutex);
+                        m_progress = result;
+                    });
+            });
+        }
+
+        bool active() const {
+            return m_future.valid();
+        }
+
+        bool ready() const {
+            return active() && m_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;
+        }
+
+        search::Result finish() {
+            return m_future.get();
+        }
+
+        void stop() {
+            m_stopSource.request_stop();
+        }
+
+        void cancel() {
+            stop();
+            if (m_future.valid()) {
+                m_future.wait();
+                try {
+                    m_future.get();
+                }
+                catch (...) {
+                }
+            }
+        }
+
+        void clear() {
+            cancel();
+            m_search->clear();
+            std::lock_guard lock(m_mutex);
+            m_progress = {};
+        }
+
+        search::Result progress() const {
+            std::lock_guard lock(m_mutex);
+            return m_progress;
+        }
+
+    private:
+        std::unique_ptr<search::Search> m_search = std::make_unique<search::Search>();
+        std::future<search::Result> m_future;
+        std::stop_source m_stopSource;
+        mutable std::mutex m_mutex;
+        search::Result m_progress;
+};
+
+std::string move_text(move_t move) {
+    square_t target = Move::to(move);
+    if (Move::type(move) == Move::Type::Castling)
+        target = Square::castling_king_square(target > Move::from(move),
+            Square::rank(Move::from(move)) == 0 ? PieceColor::White : PieceColor::Black);
+    std::string text;
+    for (square_t square : {Move::from(move), target}) {
+        text += static_cast<char>('a' + Square::file(square));
+        text += static_cast<char>('1' + Square::rank(square));
+    }
+    if (Move::type(move) == Move::Type::Promotion)
+        text += Piece::symbol(Piece::create(Move::promotion_piece(move), PieceColor::Black));
+    return text;
+}
+
+std::string score_text(int score) {
+    if (std::abs(score) >= search::MateThreshold) {
+        int moves = (search::MateScore - std::abs(score) + 1) / 2;
+        return std::string(score < 0 ? "-M" : "M") + std::to_string(moves);
+    }
+    return std::to_string(score) + " cp";
+}
+
+SDL_Keycode control_at(Position position) {
+    if (position.x < 24 || position.x >= BoardX - 24 || position.y < 100)
+        return 0;
+    if (std::fmod(position.y - 100, 44.0f) >= 36)
+        return 0;
+    int index = static_cast<int>((position.y - 100) / 44);
+    return index >= 0 && index < static_cast<int>(ControlKeys.size()) ? ControlKeys[index] : 0;
+}
+
+void draw_text(SDL_Renderer* renderer, float x, float y, const char* text) {
+    float scaleX;
+    float scaleY;
+    SDL_GetRenderScale(renderer, &scaleX, &scaleY);
+    SDL_SetRenderScale(renderer, scaleX * TextScale, scaleY * TextScale);
+    SDL_RenderDebugText(renderer, x / TextScale, y / TextScale, text);
+    SDL_SetRenderScale(renderer, scaleX, scaleY);
+}
+
+void draw_controls(SDL_Renderer* renderer, const Board& board, PieceColor humanColor, bool localGame,
+    const search::Limits& limits, const search::Result& result, bool thinking, const std::string& error) {
+    SDL_SetRenderDrawColor(renderer, 35, 35, 35, 255);
+    std::string mode = localGame ? "Local two-player" :
+        humanColor == PieceColor::White ? "You: White | Engine: Black" : "You: Black | Engine: White";
+    draw_text(renderer, 24, 40, mode.c_str());
+    for (int index = 0; index < static_cast<int>(ControlLabels.size()); ++index) {
+        SDL_FRect rectangle {24, 100.0f + index * 44, BoardX - 48, 36};
+        SDL_RenderRect(renderer, &rectangle);
+        draw_text(renderer, 34, rectangle.y + 14, ControlLabels[index]);
+    }
+    std::string settings = "-/+: " + std::to_string(limits.time.count()) + " ms | MultiPV " + std::to_string(limits.multiPv);
+    draw_text(renderer, 24, 430, settings.c_str());
+    auto [gameResult, reason] = board.is_game_over();
+    std::string status = thinking ? "Engine thinking..." : "Your move";
+    if (localGame)
+        status = board.is_white_to_move() ? "White to move" : "Black to move";
+    if (gameResult == GameResult::Lose)
+        status = board.is_white_to_move() ? "Checkmate: Black wins" : "Checkmate: White wins";
+    else if (gameResult == GameResult::Draw) {
+        switch (reason) {
+            case GameResultReason::Stalemate: status = "Draw: stalemate"; break;
+            case GameResultReason::FiftyMoveRule: status = "Draw: fifty-move rule"; break;
+            case GameResultReason::ThreefoldRepetition: status = "Draw: repetition"; break;
+            default: status = "Draw: insufficient material"; break;
+        }
+    }
+    draw_text(renderer, 24, 470, status.c_str());
+    std::string statistics = "Depth " + std::to_string(result.depth) + "/" +
+        std::to_string(result.selectiveDepth) + " | Nodes " + std::to_string(result.nodes);
+    draw_text(renderer, 24, 510, statistics.c_str());
+    std::string elapsed = std::to_string(result.elapsed.count()) + " ms | Score: search side";
+    draw_text(renderer, 24, 534, elapsed.c_str());
+    for (int index = 0; index < static_cast<int>(result.variations.size()); ++index) {
+        const auto& variation = result.variations[index];
+        std::string text = std::to_string(index + 1) + ". " + score_text(variation.score);
+        draw_text(renderer, 24, 574.0f + index * 64, text.c_str());
+        text.clear();
+        for (std::size_t ply = 0; ply < std::min<std::size_t>(5, variation.moves.size()); ++ply)
+            text += move_text(variation.moves[ply]) + " ";
+        draw_text(renderer, 24, 594.0f + index * 64, text.c_str());
+    }
+    if (!error.empty())
+        draw_text(renderer, 24, 800, error.c_str());
+}
 
 void set_color(SDL_Renderer* renderer, SDL_Color color) {
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
@@ -332,6 +464,9 @@ void update_title(SDL_Window* window, const Board& board, const MoveList& legalM
         else
             title += "Stalemate";
     }
+    else if (board.is_game_over().first == GameResult::Draw) {
+        title += "Draw";
+    }
     else {
         title += board.is_white_to_move() ? "White to move" : "Black to move";
 
@@ -388,6 +523,7 @@ bool try_move(Board& board, MoveGenerator& generator, square_t destination,
 }
 
 int main(int, char**) {
+    using namespace gui;
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
 
     if (!SDL_Init(SDL_INIT_VIDEO))
@@ -435,6 +571,59 @@ int main(int, char**) {
     bool dragging = false;
     bool selectedBeforePress = false;
     bool running = true;
+    bool localGame = false;
+    PieceColor humanColor = PieceColor::White;
+    search::Limits limits;
+    EnginePlayer engine;
+    search::Result searchResult;
+    std::string engineError;
+
+    auto handle_control = [&](SDL_Keycode key) {
+        if (key == SDLK_SPACE) {
+            engine.stop();
+            return;
+        }
+        if (key == SDLK_M) {
+            limits.multiPv = limits.multiPv % 3 + 1;
+            return;
+        }
+        if (key == SDLK_MINUS || key == SDLK_EQUALS || key == SDLK_PLUS) {
+            int change = key == SDLK_MINUS ? -250 : 250;
+            limits.time = std::chrono::milliseconds(std::clamp<int>(static_cast<int>(limits.time.count()) + change, 250, 10000));
+            return;
+        }
+        if (key != SDLK_W && key != SDLK_B && key != SDLK_L && key != SDLK_N && key != SDLK_U)
+            return;
+        engine.clear();
+        engineError.clear();
+        searchResult = {};
+        if (key == SDLK_U) {
+            if (!board.all_game_moves().empty()) {
+                board.unmake_move();
+                if (!localGame && board.move_colour() != humanColor && !board.all_game_moves().empty())
+                    board.unmake_move();
+            }
+        }
+        else {
+            if (key == SDLK_W || key == SDLK_B) {
+                humanColor = key == SDLK_W ? PieceColor::White : PieceColor::Black;
+                localGame = false;
+            }
+            if (key == SDLK_L)
+                localGame = true;
+            board.load_start_position();
+        }
+        legalMoves = generator.generate_moves(board);
+        clear_selection(selected, selectedMoves);
+        promotion = {};
+        mouseDown = false;
+        dragging = false;
+        selectedBeforePress = false;
+        pressSquare = Square::None;
+        lastFrom = Square::None;
+        lastTo = Square::None;
+        update_title(window, board, legalMoves, false);
+    };
 
     update_title(window, board, legalMoves, false);
 
@@ -444,6 +633,9 @@ int main(int, char**) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
                 running = false;
+            }
+            else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+                handle_control(event.key.key);
             }
             else if (event.type == SDL_EVENT_MOUSE_MOTION) {
                 mouse = {event.motion.x, event.motion.y};
@@ -457,6 +649,13 @@ int main(int, char**) {
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
                 event.button.button == SDL_BUTTON_LEFT) {
                 mouse = {event.button.x, event.button.y};
+                SDL_Keycode control = control_at(mouse);
+                if (control != 0) {
+                    handle_control(control);
+                    continue;
+                }
+                if ((!localGame && board.move_colour() != humanColor) || board.is_game_over().first != GameResult::None)
+                    continue;
                 pressPosition = mouse;
                 mouseDown = true;
                 dragging = false;
@@ -477,6 +676,8 @@ int main(int, char**) {
                 event.button.button == SDL_BUTTON_LEFT) {
                 mouse = {event.button.x, event.button.y};
 
+                if (!mouseDown)
+                    continue;
                 if (promotion.active) {
                     move_t move = promotion_at(mouse, promotion);
 
@@ -532,14 +733,45 @@ int main(int, char**) {
             }
         }
 
+        if (!running)
+            break;
+        if (engine.ready()) {
+            try {
+                searchResult = engine.finish();
+                if (searchResult.bestMove != 0 && generator.is_legal(board, searchResult.bestMove)) {
+                    commit_move(board, generator, searchResult.bestMove, legalMoves, selected,
+                        selectedMoves, lastFrom, lastTo);
+                    update_title(window, board, legalMoves, false);
+                }
+            }
+            catch (const std::exception& error) {
+                engineError = error.what();
+                localGame = true;
+            }
+        }
+        if (!engine.active() && !localGame && board.move_colour() != humanColor &&
+            board.is_game_over().first == GameResult::None) {
+            try {
+                engine.start(board, limits);
+            }
+            catch (const std::exception& error) {
+                engineError = error.what();
+                localGame = true;
+            }
+        }
+        if (engine.active())
+            searchResult = engine.progress();
+
         set_color(renderer, Background);
         SDL_RenderClear(renderer);
         draw_board(renderer, sprites, board, selectedMoves, selected, lastFrom,
             lastTo, dragging, mouse);
         draw_promotion_choices(renderer, sprites, promotion);
+        draw_controls(renderer, board, humanColor, localGame, limits, searchResult, engine.active(), engineError);
         SDL_RenderPresent(renderer);
     }
 
+    engine.cancel();
     SDL_DestroyTexture(sprites.texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
