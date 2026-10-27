@@ -206,6 +206,16 @@ Result Search::iterative_deepening(Board board, const Limits& limits, std::stop_
         result.score = board.is_in_check() ? -MateScore : 0;
         return result;
     }
+
+    if (!limits.searchMoves.empty()) {
+        MoveList restricted;
+        for (move_t move : moves)
+            if (std::find(limits.searchMoves.begin(), limits.searchMoves.end(), move) != limits.searchMoves.end())
+                restricted.add(move);
+        if (restricted.is_empty())
+            throw std::invalid_argument("Search move list contains no legal root move");
+        moves = restricted;
+    }
     if (is_draw(board, false))
         return result;
 

@@ -1,6 +1,6 @@
 # ChessEngineV2
 
-The project builds the engine in `engine/` as a reusable library, a console executable, and a separate SDL3 desktop GUI.
+The project builds the engine in `engine/` as a reusable library, a UCI executable, and a separate SDL3 desktop GUI.
 
 ## Windows setup
 
@@ -26,19 +26,29 @@ The left panel has clickable controls and keyboard shortcuts:
 
 The panel displays completed search depth, nodes, elapsed time, scores, and PV moves. Scores are in centipawns from the searching side's perspective; `M` denotes mate distance in moves. Checkmate, stalemate, repetition, insufficient material, and the fifty-move rule end the game. Restart, undo, and closing the window cancel outstanding work before replacing its position.
 
-The console engine executable is created at `build/windows/Debug/chess_cli.exe`.
+The UCI engine executable is created at `build/windows/Debug/chess_uci.exe`. It can
+be added directly to a UCI-compatible chess GUI. A minimal terminal session is:
+
+```text
+uci
+isready
+position startpos moves e2e4 e7e5
+go depth 8
+quit
+```
 
 ## Targets
 
 - `chess_engine` contains only engine code and has no GUI dependency.
-- `chess_cli` is the current console entry point.
+- `chess_uci_lib` contains the reusable UCI protocol implementation.
+- `chess_uci` is the UCI-compatible console engine.
 - `chess_gui` contains the debugging interface and links the engine with SDL3.
 
 To build the engine without installing SDL3, configure with `-DCHESS_BUILD_GUI=OFF`.
 
 ## Search
 
-`search::Search::iterative_deepening` takes a board copy, `search::Limits`, an optional `std::stop_token`, and an optional completed-iteration callback. Use one search per instance at a time. The callback runs on the calling/search thread. `clear()` resets move ordering between games and must be called while idle.
+`search::Search::iterative_deepening` takes a board copy, `search::Limits`, an optional `std::stop_token`, and an optional completed-iteration callback. Use one search per instance at a time. The callback runs on the calling/search thread. `clear()` resets move ordering between games and must be called while idle. `Limits::searchMoves` can restrict the legal root moves; an empty list searches every legal move.
 
 ```cpp
 search::Search engine;
@@ -172,8 +182,27 @@ controller.set_integrations(std::move(integrations));
 ```
 
 Book/tablebase hits return a one-move variation at depth zero; book scores are
-static evaluations, not searched scores. UCI, protocol parsing, and pondering
-lifecycle remain outside the engine library.
+static evaluations, not searched scores.
+
+## UCI protocol
+
+The wrapper implements the standard `uci`, `debug`, `isready`, `setoption`,
+`register`, `ucinewgame`, `position`, `go`, `stop`, `ponderhit`, and `quit`
+commands. Searches run on a worker thread, so readiness, cancellation, and
+ponder transitions remain responsive. Supported `go` limits include clocks,
+increments, moves to go, move time, depth, nodes, mate, infinite, ponder, and
+`searchmoves`.
+
+The advertised options include hash size/clearing, single-thread capability,
+pondering, MultiPV, move overhead, analysis mode, the native opening book,
+Syzygy paths, and individual switches for the engine's optional search features.
+Changing search configuration is synchronized with the worker and reconstructs
+search state when required. `ucinewgame` and `Clear Hash` clear the transposition
+and move-ordering state.
+
+For engine development, the non-standard `d`, `eval`, `perft <depth>`,
+`bench [depth]`, and `help` commands are also available. Protocol errors are
+reported as `info string error: ...` and do not terminate the command loop.
 
 ## Tests
 

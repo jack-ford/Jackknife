@@ -9,7 +9,12 @@
 namespace chess {
 
 inline std::string coordinate_move(move_t move) {
-    std::string result = Square::to_string(Move::from(move)) + Square::to_string(Move::to(move));
+    square_t target = Move::to(move);
+    if (Move::type(move) == Move::Type::Castling) {
+        PieceColor color = Square::rank(Move::from(move)) == 0 ? PieceColor::White : PieceColor::Black;
+        target = Square::castling_king_square(target > Move::from(move), color);
+    }
+    std::string result = Square::to_string(Move::from(move)) + Square::to_string(target);
     if (Move::type(move) == Move::Type::Promotion) {
         constexpr char Pieces[] = "   nbrq";
         result += Pieces[static_cast<int>(Move::promotion_piece(move))];

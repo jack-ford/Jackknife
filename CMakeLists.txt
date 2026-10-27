@@ -79,13 +79,16 @@ if(CHESS_NNUE_AVX2)
     endif()
 endif()
 
-add_executable(chess_cli
-    cli/main.cpp
+add_library(chess_uci_lib
+    uci/uci.cpp
 )
+target_include_directories(chess_uci_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/uci")
+target_link_libraries(chess_uci_lib PUBLIC chess_engine)
 
-target_link_libraries(chess_cli PRIVATE chess_engine)
+add_executable(chess_uci uci/main.cpp)
+target_link_libraries(chess_uci PRIVATE chess_uci_lib)
 
-add_executable(chess_bench cli/bench.cpp)
+add_executable(chess_bench benchmarking/search_bench.cpp)
 target_link_libraries(chess_bench PRIVATE chess_engine)
 
 if(CHESS_BUILD_BENCHMARKS)
@@ -181,4 +184,8 @@ if(BUILD_TESTING)
     add_executable(search_integration_tests tests/search_integration_tests.cpp)
     target_link_libraries(search_integration_tests PRIVATE chess_engine)
     add_test(NAME search_integrations COMMAND search_integration_tests)
+
+    add_executable(uci_tests tests/uci_tests.cpp)
+    target_link_libraries(uci_tests PRIVATE chess_uci_lib)
+    add_test(NAME uci_protocol COMMAND uci_tests)
 endif()

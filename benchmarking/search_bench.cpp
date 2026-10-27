@@ -20,7 +20,8 @@ int main(int argc, char** argv) {
         if (argc > 1) {
             std::string argument = argv[1];
             auto [end, error] = std::from_chars(argument.data(), argument.data() + argument.size(), limits.depth);
-            if (error != std::errc {} || end != argument.data() + argument.size() || limits.depth < 1 || limits.depth >= search::MaxPly)
+            if (error != std::errc {} || end != argument.data() + argument.size() ||
+                limits.depth < 1 || limits.depth >= search::MaxPly)
                 throw std::invalid_argument("Usage: chess_bench [depth] [suite.txt] [experimental]");
         }
         search::Options options;
@@ -44,14 +45,18 @@ int main(int argc, char** argv) {
         };
         if (argc > 2 && std::string(argv[2]) != "-") {
             std::ifstream input(argv[2]);
-            if (!input) throw std::invalid_argument("Cannot open benchmark suite");
+            if (!input)
+                throw std::invalid_argument("Cannot open benchmark suite");
             positions.clear();
             std::string line;
             while (std::getline(input, line)) {
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-                if (!line.empty() && line[0] != '#') positions.push_back(line);
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                if (!line.empty() && line[0] != '#')
+                    positions.push_back(line);
             }
-            if (positions.empty()) throw std::invalid_argument("Empty benchmark suite");
+            if (positions.empty())
+                throw std::invalid_argument("Empty benchmark suite");
         }
         auto engine = std::make_unique<search::Search>(16, options);
         uint64_t totalNodes = 0;
@@ -71,16 +76,19 @@ int main(int argc, char** argv) {
             if (!passed) {
                 std::istringstream expected(line.substr(delimiter + 1));
                 std::string move;
-                while (expected >> move) passed = passed || move == best;
+                while (expected >> move)
+                    passed = passed || move == best;
             }
             failures += !passed;
             totalNodes += result.nodes;
             totalSeconds += seconds;
             std::cout << index + 1 << ',' << result.depth << ',' << result.nodes << ',' << seconds << ','
-                << static_cast<uint64_t>(result.nodes / std::max(seconds, 0.000001)) << ',' << result.score << ',' << best << ',' << passed << '\n';
+                << static_cast<uint64_t>(result.nodes / std::max(seconds, 0.000001)) << ',' << result.score << ','
+                << best << ',' << passed << '\n';
         }
         std::cout << "total,0," << totalNodes << ',' << totalSeconds << ','
-            << static_cast<uint64_t>(totalNodes / std::max(totalSeconds, 0.000001)) << ",0,-," << (failures == 0) << '\n';
+            << static_cast<uint64_t>(totalNodes / std::max(totalSeconds, 0.000001)) << ",0,-,"
+            << (failures == 0) << '\n';
         return failures == 0 ? 0 : 1;
     }
     catch (const std::exception& error) {

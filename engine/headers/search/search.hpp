@@ -76,6 +76,9 @@ struct Limits {
     uint64_t nodes = 0;
     std::chrono::milliseconds time {1000};
     std::chrono::milliseconds softTime {0};
+    // Empty means all legal root moves. Callers must supply legal moves from
+    // the root position; unknown entries are ignored defensively.
+    std::vector<chess::move_t> searchMoves;
 
     void validate() const;
 };
