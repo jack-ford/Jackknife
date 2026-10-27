@@ -4,6 +4,7 @@ project(ChessEngineV2 VERSION 0.1.0 LANGUAGES CXX)
 
 option(CHESS_BUILD_GUI "Build the SDL3 desktop GUI" ON)
 option(CHESS_NNUE_AVX2 "Use AVX2 NNUE kernels (requires an AVX2-capable CPU)" ON)
+option(CHESS_BUILD_BENCHMARKS "Build the core engine benchmark suite" ON)
 
 set(NNUE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/data/network-20260910.nnue")
 file(SHA256 "${NNUE_FILE}" NNUE_HASH)
@@ -86,6 +87,14 @@ target_link_libraries(chess_cli PRIVATE chess_engine)
 
 add_executable(chess_bench cli/bench.cpp)
 target_link_libraries(chess_bench PRIVATE chess_engine)
+
+if(CHESS_BUILD_BENCHMARKS)
+    add_executable(chess_benchmark benchmarking/benchmark.cpp)
+    target_link_libraries(chess_benchmark PRIVATE chess_engine)
+    if(CHESS_NNUE_AVX2)
+        target_compile_definitions(chess_benchmark PRIVATE CHESS_NNUE_AVX2_ENABLED)
+    endif()
+endif()
 
 if(CHESS_BUILD_GUI)
     find_package(SDL3 CONFIG REQUIRED)

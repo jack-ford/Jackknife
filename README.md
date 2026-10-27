@@ -200,6 +200,15 @@ build/windows/Release/chess_bench.exe 7 tests/data/tactics.txt
 build/windows/Release/chess_bench.exe 7 - experimental
 ```
 
+The dedicated core benchmark suite in `benchmarking/` separately measures legal
+move generation, validated perft, NNUE evaluation, fixed-depth search, and every
+search-option ablation. Its PowerShell runner creates a GUI-free Release build
+and saves the results:
+
+```powershell
+benchmarking/run.ps1 -Mode all -Depth 7 -Repetitions 3
+```
+
 Tests include start-position perft through depth five (4,865,609 nodes), seeded
 legal-game walks comparing staged/tactical moves with full generation, SEE
 against a separate legal-board recapture reference, FEN and accumulator undo
