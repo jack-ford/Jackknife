@@ -4,7 +4,6 @@ project(ChessEngineV2 VERSION 0.1.0 LANGUAGES CXX)
 
 option(CHESS_BUILD_GUI "Build the SDL3 desktop GUI" ON)
 option(CHESS_AVX2 "Build for AVX2-capable CPUs: AVX2 NNUE kernels and native bit-manipulation instructions" ON)
-option(CHESS_BUILD_BENCHMARKS "Build the core engine benchmark suite" ON)
 option(CHESS_ENABLE_LTO "Use link-time optimization for Release builds when supported" ON)
 
 if(CHESS_ENABLE_LTO)
@@ -116,14 +115,6 @@ add_executable(chess_uci uci/main.cpp)
 target_link_libraries(chess_uci PRIVATE chess_uci_lib)
 copy_opening_book(chess_uci)
 
-if(CHESS_BUILD_BENCHMARKS)
-    add_executable(chess_benchmark benchmarking/benchmark.cpp)
-    target_link_libraries(chess_benchmark PRIVATE chess_engine)
-    if(CHESS_AVX2)
-        target_compile_definitions(chess_benchmark PRIVATE CHESS_AVX2_ENABLED)
-    endif()
-endif()
-
 if(CHESS_BUILD_GUI)
     find_package(SDL3 CONFIG REQUIRED)
     find_package(SDL3_image CONFIG REQUIRED)
@@ -145,14 +136,8 @@ if(CHESS_BUILD_GUI)
 endif()
 
 include(CTest)
-# The tactical suite runner serves both the test suite and benchmarking.
-if(BUILD_TESTING OR CHESS_BUILD_BENCHMARKS)
-    add_executable(chess_bench benchmarking/search_bench.cpp)
-    target_link_libraries(chess_bench PRIVATE chess_engine)
-endif()
 
 if(BUILD_TESTING)
-    add_test(NAME tactical_suite COMMAND chess_bench 4 "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/tactics.txt")
     add_executable(network_loading_tests tests/network_loading_tests.cpp)
     target_link_libraries(network_loading_tests PRIVATE chess_engine)
     target_compile_definitions(network_loading_tests PRIVATE TEST_NETWORK_PATH="${NNUE_FILE}"

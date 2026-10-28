@@ -228,29 +228,6 @@ ctest --test-dir build/windows -C Release --output-on-failure
 
 Use `-DBUILD_TESTING=OFF` to omit test executables. For faster play, build with `cmake --build build/windows --config Release` and run `build/windows/Release/chess_gui.exe`.
 
-### Benchmarks and differential checks
-
-`chess_bench` reports CSV rows with depth, nodes, seconds, NPS, score, best move,
-and tactical pass/fail, followed by an aggregate row. It clears search state
-before each position. Optional suite files contain `full FEN | acceptable moves`
-(space-separated coordinate moves); omit `|` for positions without assertions.
-A failed tactical expectation returns a nonzero exit status.
-
-```powershell
-build/windows/Release/chess_bench.exe 7
-build/windows/Release/chess_bench.exe 7 tests/data/tactics.txt
-build/windows/Release/chess_bench.exe 7 - experimental
-```
-
-The dedicated core benchmark suite in `benchmarking/` separately measures legal
-move generation, validated perft, NNUE evaluation, fixed-depth search, and every
-search-option ablation. Its PowerShell runner creates a GUI-free Release build
-and saves the results:
-
-```powershell
-benchmarking/run.ps1 -Mode all -Depth 7 -Repetitions 3
-```
-
 Tests include start-position perft through depth five (4,865,609 nodes), seeded
 legal-game walks comparing staged/tactical moves with full generation, SEE
 against a separate legal-board recapture reference, FEN and accumulator undo

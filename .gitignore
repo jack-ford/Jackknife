@@ -2,6 +2,5 @@
 /.vcpkg/
 /.vs/
 /out/
-/benchmarking/results/
 *.user
 *.suo
