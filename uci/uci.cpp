@@ -21,8 +21,8 @@
 namespace uci {
 namespace {
 
-constexpr std::string_view EngineName = "ChessEngineV2 0.1.0";
-constexpr std::string_view EngineAuthor = "ChessEngineV2 contributors";
+constexpr std::string_view EngineName = "Jackknife 0.2.0";
+constexpr std::string_view EngineAuthor = "Jack Ford";
 
 std::string lower(std::string_view value) {
     std::string result(value);
