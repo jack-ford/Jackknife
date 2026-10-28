@@ -66,8 +66,8 @@ class MoveGenerator {
         GenerationMode m_generationMode = GenerationMode::All;
         PromotionMode m_promotionMode = PromotionMode::All;
         bool m_oneMoveOnly = false;
-        PieceColor m_friendlyColour = PieceColor::White;
-        PieceColor m_opponentColour = PieceColor::Black;
+        PieceColor m_friendlyColor = PieceColor::White;
+        PieceColor m_opponentColor = PieceColor::Black;
         square_t m_friendlyKingSquare = Square::None;
         int m_checkCount = 0;
         bitboard_t m_checkRayBitmask = 0;

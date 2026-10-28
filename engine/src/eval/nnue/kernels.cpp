@@ -68,6 +68,36 @@ void activate(const int16_t* input, int16_t* output) {
         output[i] = screlu(input[i]);
 }
 
+void hidden_layer(const int16_t* input, const int16_t* weights, int32_t* output) {
+    constexpr int InputSize = 2 * AccumulatorSize;
+    int row = 0;
+#if defined(__AVX2__)
+    // Four rows share each input load and one horizontal reduction.
+    constexpr int RowsPerPass = 4;
+    static_assert(HiddenSize % RowsPerPass == 0 && InputSize % 16 == 0);
+    for (; row < HiddenSize; row += RowsPerPass) {
+        const int16_t* rows = weights + row * InputSize;
+        __m256i sum0 = _mm256_setzero_si256();
+        __m256i sum1 = sum0, sum2 = sum0, sum3 = sum0;
+        for (int i = 0; i < InputSize; i += 16) {
+            __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
+            const auto weight = [&](int offset) {
+                return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rows + offset * InputSize + i));
+            };
+            sum0 = _mm256_add_epi32(sum0, _mm256_madd_epi16(value, weight(0)));
+            sum1 = _mm256_add_epi32(sum1, _mm256_madd_epi16(value, weight(1)));
+            sum2 = _mm256_add_epi32(sum2, _mm256_madd_epi16(value, weight(2)));
+            sum3 = _mm256_add_epi32(sum3, _mm256_madd_epi16(value, weight(3)));
+        }
+        __m256i sums = _mm256_hadd_epi32(_mm256_hadd_epi32(sum0, sum1), _mm256_hadd_epi32(sum2, sum3));
+        __m128i result = _mm_add_epi32(_mm256_castsi256_si128(sums), _mm256_extracti128_si256(sums, 1));
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(output + row), result);
+    }
+#endif
+    for (; row < HiddenSize; ++row)
+        output[row] = dot_product(input, weights + row * InputSize, InputSize);
+}
+
 int32_t dot_product(const int16_t* values, const int16_t* weights, int size) {
     int32_t sum = 0;
     int i = 0;

@@ -275,7 +275,7 @@ bool can_select(const Board& board, square_t square) {
         return false;
 
     piece_t piece = board.get_square(square);
-    return !Piece::is_empty(piece) && Piece::color(piece) == board.move_colour();
+    return !Piece::is_empty(piece) && Piece::color(piece) == board.move_color();
 }
 
 bool is_capture(const Board& board, move_t move) {
@@ -345,7 +345,7 @@ void draw_legal_moves(SDL_Renderer* renderer, const Board& board,
 void draw_board(SDL_Renderer* renderer, const SpriteSheet& sprites,
     const Board& board, const MoveList& selectedMoves, square_t selected,
     square_t lastFrom, square_t lastTo, bool dragging, Position mouse) {
-    square_t checkedKing = board.is_in_check() ? board.king_square(board.move_colour()) : Square::None;
+    square_t checkedKing = board.is_in_check() ? board.king_square(board.move_color()) : Square::None;
 
     for (int rank = 0; rank < 8; rank++) {
         for (int file = 0; file < 8; file++) {
@@ -358,7 +358,7 @@ void draw_board(SDL_Renderer* renderer, const SpriteSheet& sprites,
         }
     }
 
-    draw_legal_moves(renderer, board, selectedMoves, board.move_colour());
+    draw_legal_moves(renderer, board, selectedMoves, board.move_color());
 
     for (int rank = 0; rank < 8; rank++) {
         for (int file = 0; file < 8; file++) {
@@ -491,7 +491,7 @@ void select_square(const MoveList& legalMoves, square_t square,
 void commit_move(Board& board, MoveGenerator& generator, move_t move,
     MoveList& legalMoves, square_t& selected, MoveList& selectedMoves,
     square_t& lastFrom, square_t& lastTo) {
-    PieceColor color = board.move_colour();
+    PieceColor color = board.move_color();
     lastFrom = Move::from(move);
     lastTo = displayed_destination(move, color);
     board.make_move(move);
@@ -502,7 +502,7 @@ void commit_move(Board& board, MoveGenerator& generator, move_t move,
 bool try_move(Board& board, MoveGenerator& generator, square_t destination,
     MoveList& legalMoves, square_t& selected, MoveList& selectedMoves,
     square_t& lastFrom, square_t& lastTo, PendingPromotion& promotion) {
-    MoveList candidates = moves_to(selectedMoves, destination, board.move_colour());
+    MoveList candidates = moves_to(selectedMoves, destination, board.move_color());
 
     if (candidates.is_empty())
         return false;
@@ -513,7 +513,7 @@ bool try_move(Board& board, MoveGenerator& generator, square_t destination,
     }
     else {
         promotion.moves = candidates;
-        promotion.color = board.move_colour();
+        promotion.color = board.move_color();
         promotion.active = true;
     }
 
@@ -600,7 +600,7 @@ int main(int, char**) {
         if (key == SDLK_U) {
             if (!board.all_game_moves().empty()) {
                 board.unmake_move();
-                if (!localGame && board.move_colour() != humanColor && !board.all_game_moves().empty())
+                if (!localGame && board.move_color() != humanColor && !board.all_game_moves().empty())
                     board.unmake_move();
             }
         }
@@ -654,7 +654,7 @@ int main(int, char**) {
                     handle_control(control);
                     continue;
                 }
-                if ((!localGame && board.move_colour() != humanColor) || board.is_game_over().first != GameResult::None)
+                if ((!localGame && board.move_color() != humanColor) || board.is_game_over().first != GameResult::None)
                     continue;
                 pressPosition = mouse;
                 mouseDown = true;
@@ -749,7 +749,7 @@ int main(int, char**) {
                 localGame = true;
             }
         }
-        if (!engine.active() && !localGame && board.move_colour() != humanColor &&
+        if (!engine.active() && !localGame && board.move_color() != humanColor &&
             board.is_game_over().first == GameResult::None) {
             try {
                 engine.start(board, limits);

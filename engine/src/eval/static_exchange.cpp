@@ -123,7 +123,7 @@ int ExchangePosition::score(move_t move, PieceColor color) {
 }
 
 int static_exchange(const Board& board, move_t move) {
-    return ExchangePosition(board).score(move, board.move_colour());
+    return ExchangePosition(board).score(move, board.move_color());
 }
 
 }

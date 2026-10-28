@@ -95,7 +95,7 @@ void print_environment(int depth, int repetitions) {
     std::cout << "benchmark,configuration,value\n";
     std::cout << "environment,search_depth," << depth << '\n';
     std::cout << "environment,repetitions," << repetitions << '\n';
-#if defined(CHESS_NNUE_AVX2_ENABLED)
+#if defined(CHESS_AVX2_ENABLED)
     std::cout << "environment,nnue_kernel,avx2\n";
 #else
     std::cout << "environment,nnue_kernel,scalar\n";
@@ -241,14 +241,14 @@ std::vector<Feature> feature_configurations() {
     disabled("no_killer_moves", &search::Options::killerMoves);
     disabled("no_see_pruning", &search::Options::seePruning);
     disabled("no_delta_pruning", &search::Options::deltaPruning);
-    enabled("continuation_history", &search::Options::continuationHistory);
+    disabled("no_razoring", &search::Options::razoring);
+    disabled("no_continuation_history", &search::Options::continuationHistory);
+    disabled("no_singular_extensions", &search::Options::singularExtensions);
+    disabled("no_correction_history", &search::Options::correctionHistory);
     enabled("counter_moves", &search::Options::counterMoves);
     enabled("capture_history", &search::Options::captureHistory);
     enabled("pawn_history", &search::Options::pawnHistory);
-    enabled("singular_extensions", &search::Options::singularExtensions);
     enabled("probcut", &search::Options::probCut);
-    enabled("razoring", &search::Options::razoring);
-    enabled("correction_history", &search::Options::correctionHistory);
     return features;
 }
 

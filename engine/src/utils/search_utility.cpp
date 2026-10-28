@@ -14,7 +14,7 @@ bool is_quiet(const Board& board, move_t move) {
 }
 
 bool has_null_material(const Board& board) {
-    PieceColor color = board.move_colour();
+    PieceColor color = board.move_color();
     return board.knights(color).size() + board.bishops(color).size() +
         board.rooks(color).size() + board.queens(color).size() >= 2;
 }

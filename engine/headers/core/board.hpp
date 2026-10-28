@@ -80,6 +80,8 @@ class Board final {
 
         bool is_in_check() const;
         bool calculate_in_check_state() const;
+        // Requires a legal move. Exact for direct, discovered, castling, en-passant, and promotion checks.
+        bool gives_check(move_t move) const;
 
         void load_start_position();
         // Rejects invalid piece/king counts, adjacent kings, back-rank pawns, and invalid EP geometry.
@@ -94,7 +96,7 @@ class Board final {
         const std::array<piece_t, Square::Count>& squares() const;
         square_t king_square(PieceColor color) const;
         const std::array<bitboard_t, 14>& piece_bitboards() const;
-        const std::array<bitboard_t, 2>& colour_bitboards() const;
+        const std::array<bitboard_t, 2>& color_bitboards() const;
         bitboard_t all_pieces_bitboard() const;
         bitboard_t friendly_orthogonal_sliders() const;
         bitboard_t friendly_diagonal_sliders() const;
@@ -110,10 +112,10 @@ class Board final {
         std::span<const square_t> pawns(PieceColor color) const;
 
         bool is_white_to_move() const;
-        PieceColor move_colour() const;
-        PieceColor opponent_colour() const;
-        int move_colour_index() const;
-        int opponent_colour_index() const;
+        PieceColor move_color() const;
+        PieceColor opponent_color() const;
+        int move_color_index() const;
+        int opponent_color_index() const;
         int ply_count() const;
         int fifty_move_counter() const;
         // Canonical position key: en passant is hashed only when a legal capture exists.
@@ -148,7 +150,7 @@ class Board final {
         std::array<piece_t, Square::Count> m_squares {};
         std::array<square_t, 2> m_kingSquare { Square::None, Square::None };
         std::array<bitboard_t, 14> m_pieceBitboards {};
-        std::array<bitboard_t, 2> m_colourBitboards {};
+        std::array<bitboard_t, 2> m_colorBitboards {};
         bitboard_t m_allPiecesBitboard = 0;
         bitboard_t m_friendlyOrthogonalSliders = 0;
         bitboard_t m_friendlyDiagonalSliders = 0;

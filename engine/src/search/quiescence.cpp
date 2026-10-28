@@ -16,14 +16,15 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
     m_nodes++;
     m_selectiveDepth = std::max(m_selectiveDepth, ply);
 
+    // Sparse positions detect stalemate eagerly; elsewhere only mate is detected, after the evasion loop.
+    bool inCheck = board.is_in_check();
     MoveList legalMoves;
     bool eagerMoves = std::popcount(board.all_pieces_bitboard()) <= EagerMovePieceLimit;
-    if (eagerMoves)
+    if (eagerMoves) {
         m_generator.generate_moves(board, legalMoves);
-    bool hasMoves = eagerMoves ? !legalMoves.is_empty() : m_generator.has_legal_moves(board);
-    bool inCheck = m_generator.in_check();
-    if (!hasMoves)
-        return inCheck ? -MateScore + ply : 0;
+        if (legalMoves.is_empty())
+            return inCheck ? -MateScore + ply : 0;
+    }
 
     if (is_draw(board, nullSearch))
         return 0;
@@ -32,7 +33,7 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
         return eval::evaluate(board);
 
     int originalAlpha = alpha;
-    uint64_t context = context_key(board, ply, 0, Square::None, nullSearch);
+    uint64_t context = context_key({});
 
     HashProbe probe = probe_hash(board, context, ply);
     if (probe.move != 0) {
@@ -42,7 +43,8 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
             probe = {};
     }
 
-    if (beta - alpha == 1 && probe.depth == 0 && probe.can_cutoff(0, alpha, beta)) {
+    if (beta - alpha == 1 && probe.depth == 0 && board.fifty_move_counter() < HashCutoffFiftyLimit &&
+        probe.can_cutoff(0, alpha, beta)) {
         ++m_statistics.hashCutoffs;
         return probe.score;
     }
@@ -64,8 +66,10 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
     MovePicker picker(board, hashMove, [&](move_t move) {
         return is_quiet(board, move) ? quiet_score(board, move, ply) : capture_score(board, move);
     }, !inCheck, &m_generator, eagerMoves ? &legalMoves : nullptr);
+    int legalMoveCount = 0;
     while (auto candidate = picker.next()) {
         move_t move = candidate->move;
+        ++legalMoveCount;
         bool canPrune = !inCheck && Move::type(move) != Move::Type::Promotion &&
             alpha > -MateThreshold && alpha < MateThreshold && board.fifty_move_counter() < 90;
 
@@ -76,15 +80,13 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
         bool delta = m_options.deltaPruning && staticScore + eval::piece_value(victim) + DeltaMargin < alpha &&
             has_null_material(board);
 
-        board.make_move(move, true);
-
-        if (canPrune && (losing || delta) && !board.is_in_check()) {
-            board.unmake_move(move, true);
+        if (canPrune && (losing || delta) && !board.gives_check(move)) {
             m_statistics.seePrunes += losing;
             m_statistics.deltaPrunes += !losing && delta;
             continue;
         }
 
+        board.make_move(move, true);
         advance_history(board, ply, move);
         int score = -quiescence_search(board, -beta, -alpha, ply + 1, nullSearch);
         board.unmake_move(move, true);
@@ -105,6 +107,10 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
         if (score >= beta)
             break;
     }
+
+    if (inCheck && legalMoveCount == 0)
+        return -MateScore + ply;
+
     store_hash(board, context, bestMove, bestScore, staticScore, 0, ply, originalAlpha, beta);
     return bestScore;
 }

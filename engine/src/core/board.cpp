@@ -45,10 +45,10 @@ void Board::make_move(move_t move, bool inSearch) {
     bool isEnPassant = moveFlag == Move::Type::EnPassant;
     bool isPromotion = moveFlag == Move::Type::Promotion;
 
-    PieceColor moveColour = move_colour();
-    PieceColor opponentColour = opponent_colour();
+    PieceColor moveColor = move_color();
+    PieceColor opponentColor = opponent_color();
 
-    assert(!Piece::is_empty(movedPiece) && Piece::color(movedPiece) == moveColour);
+    assert(!Piece::is_empty(movedPiece) && Piece::color(movedPiece) == moveColor);
     assert(startSquare != targetSquare);
     assert(m_plyCount < std::numeric_limits<int>::max());
     assert(m_currentGameState.fiftyMoveCounter < std::numeric_limits<int>::max());
@@ -57,7 +57,7 @@ void Board::make_move(move_t move, bool inSearch) {
     piece_t capturedPiece = isCastling ? Piece::create_empty() : m_squares[captureSquare];
 
     assert(Piece::is_empty(capturedPiece) ||
-           (Piece::color(capturedPiece) == opponentColour && Piece::type(capturedPiece) != PieceType::King));
+           (Piece::color(capturedPiece) == opponentColor && Piece::type(capturedPiece) != PieceType::King));
 
     assert(!isEnPassant || (movedPieceType == PieceType::Pawn &&
            targetSquare == m_currentGameState.enPassantSquare &&
@@ -82,13 +82,13 @@ void Board::make_move(move_t move, bool inSearch) {
         m_currentGameState.fiftyMoveCounter = 0;
 
         if (Piece::type(capturedPiece) == PieceType::Rook)
-            clear_rook_castle_right(captureSquare, opponentColour);
+            clear_rook_castle_right(captureSquare, opponentColor);
     }
 
     if (movedPieceType == PieceType::King)
-        m_currentGameState.castlingRights &= ~CastlingRights::both(moveColour);
+        m_currentGameState.castlingRights &= ~CastlingRights::both(moveColor);
     else if (movedPieceType == PieceType::Rook)
-        clear_rook_castle_right(startSquare, moveColour);
+        clear_rook_castle_right(startSquare, moveColor);
     else if (movedPieceType == PieceType::Pawn) {
         m_currentGameState.fiftyMoveCounter = 0;
 
@@ -99,10 +99,10 @@ void Board::make_move(move_t move, bool inSearch) {
     if (isCastling) {
         bool kingside = targetSquare > startSquare;
 
-        square_t kingTo = Square::castling_king_square(kingside, moveColour);
-        square_t rookTo = Square::castling_rook_square(kingside, moveColour);
+        square_t kingTo = Square::castling_king_square(kingside, moveColor);
+        square_t rookTo = Square::castling_rook_square(kingside, moveColor);
 
-        piece_t rookPiece = Piece::create(PieceType::Rook, moveColour);
+        piece_t rookPiece = Piece::create(PieceType::Rook, moveColor);
         assert(movedPieceType == PieceType::King && m_squares[targetSquare] == rookPiece);
 
         remove_piece(movedPiece, startSquare);
@@ -114,7 +114,7 @@ void Board::make_move(move_t move, bool inSearch) {
         newZobristKey ^= Zobrist::piece(rookPiece, targetSquare) ^ Zobrist::piece(rookPiece, rookTo);
     } else if (isPromotion) {
         assert(movedPieceType == PieceType::Pawn);
-        piece_t promotionPiece = Piece::create(Move::promotion_piece(move), moveColour);
+        piece_t promotionPiece = Piece::create(Move::promotion_piece(move), moveColor);
         remove_piece(movedPiece, startSquare);
         place_piece(promotionPiece, targetSquare);
         newZobristKey ^= Zobrist::piece(movedPiece, startSquare) ^ Zobrist::piece(promotionPiece, targetSquare);
@@ -158,15 +158,15 @@ void Board::unmake_move(move_t move, bool inSearch) {
     square_t movedTo = Move::to(move);
 
     Move::Type moveFlag = Move::type(move);
-    piece_t capturedPiece = Piece::create(m_currentGameState.capturedPieceType, opponent_colour());
+    piece_t capturedPiece = Piece::create(m_currentGameState.capturedPieceType, opponent_color());
 
     if (moveFlag == Move::Type::Castling) {
         bool kingside = movedTo > movedFrom;
 
-        square_t kingTo = Square::castling_king_square(kingside, move_colour());
-        square_t rookTo = Square::castling_rook_square(kingside, move_colour());
-        piece_t kingPiece = Piece::create(PieceType::King, move_colour());
-        piece_t rookPiece = Piece::create(PieceType::Rook, move_colour());
+        square_t kingTo = Square::castling_king_square(kingside, move_color());
+        square_t rookTo = Square::castling_rook_square(kingside, move_color());
+        piece_t kingPiece = Piece::create(PieceType::King, move_color());
+        piece_t rookPiece = Piece::create(PieceType::Rook, move_color());
 
         remove_piece(kingPiece, kingTo);
         remove_piece(rookPiece, rookTo);
@@ -177,7 +177,7 @@ void Board::unmake_move(move_t move, bool inSearch) {
 
         if (moveFlag == Move::Type::Promotion) {
             remove_piece(movedPiece, movedTo);
-            place_piece(Piece::create(PieceType::Pawn, move_colour()), movedFrom);
+            place_piece(Piece::create(PieceType::Pawn, move_color()), movedFrom);
         } else {
             move_piece(movedPiece, movedTo, movedFrom);
         }
@@ -256,20 +256,65 @@ bool Board::is_in_check() const {
 }
 
 bool Board::calculate_in_check_state() const {
-    square_t kingSquare = m_kingSquare[move_colour_index()];
+    square_t kingSquare = m_kingSquare[move_color_index()];
     assert(Square::is_valid(kingSquare));
 
-    PieceColor enemyColour = opponent_colour();
-    if (Attacks::get_pawn_attacks(kingSquare, move_colour()) & m_pieceBitboards[Piece::create(PieceType::Pawn, enemyColour)])
+    PieceColor enemyColor = opponent_color();
+    if (Attacks::get_pawn_attacks(kingSquare, move_color()) & m_pieceBitboards[Piece::create(PieceType::Pawn, enemyColor)])
         return true;
-    if (Attacks::get_knight_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::Knight, enemyColour)])
+    if (Attacks::get_knight_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::Knight, enemyColor)])
         return true;
-    if (Attacks::get_king_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::King, enemyColour)])
+    if (Attacks::get_king_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::King, enemyColor)])
         return true;
     if (Attacks::get_bishop_attacks(kingSquare, m_allPiecesBitboard) & m_enemyDiagonalSliders)
         return true;
 
     return (Attacks::get_rook_attacks(kingSquare, m_allPiecesBitboard) & m_enemyOrthogonalSliders) != 0;
+}
+
+bool Board::gives_check(move_t move) const {
+    square_t startSquare = Move::from(move);
+    square_t targetSquare = Move::to(move);
+    Move::Type moveFlag = Move::type(move);
+    PieceColor moveColor = move_color();
+    square_t enemyKing = m_kingSquare[opponent_color_index()];
+    assert(Square::is_valid(enemyKing));
+
+    PieceType movedType = moveFlag == Move::Type::Promotion ?
+        Move::promotion_piece(move) : Piece::type(m_squares[startSquare]);
+    bitboard_t startBit = Square::bitboard(startSquare);
+    bitboard_t occupied = m_allPiecesBitboard & ~startBit;
+    bitboard_t orthogonalSliders = m_friendlyOrthogonalSliders & ~startBit;
+    bitboard_t diagonalSliders = m_friendlyDiagonalSliders & ~startBit;
+    square_t landingSquare = targetSquare;
+
+    if (moveFlag == Move::Type::Castling) {
+        // Castling is encoded as king-from -> rook-from; only the rook can give check.
+        bool kingside = targetSquare > startSquare;
+        landingSquare = Square::castling_king_square(kingside, moveColor);
+        square_t rookTo = Square::castling_rook_square(kingside, moveColor);
+        occupied = (occupied & ~Square::bitboard(targetSquare)) | Square::bitboard(landingSquare) | Square::bitboard(rookTo);
+        orthogonalSliders = (orthogonalSliders & ~Square::bitboard(targetSquare)) | Square::bitboard(rookTo);
+    } else {
+        if (moveFlag == Move::Type::EnPassant)
+            occupied &= ~Square::bitboard(Square::ep_square(targetSquare));
+        occupied |= Square::bitboard(targetSquare);
+    }
+
+    bitboard_t landingBit = Square::bitboard(landingSquare);
+    if (movedType == PieceType::Rook || movedType == PieceType::Queen)
+        orthogonalSliders |= landingBit;
+    if (movedType == PieceType::Bishop || movedType == PieceType::Queen)
+        diagonalSliders |= landingBit;
+
+    bitboard_t enemyKingBit = Square::bitboard(enemyKing);
+    if (movedType == PieceType::Pawn && (Attacks::get_pawn_attacks(landingSquare, moveColor) & enemyKingBit))
+        return true;
+    if (movedType == PieceType::Knight && (Attacks::get_knight_attacks(landingSquare) & enemyKingBit))
+        return true;
+
+    return (Attacks::get_bishop_attacks(enemyKing, occupied) & diagonalSliders) ||
+        (Attacks::get_rook_attacks(enemyKing, occupied) & orthogonalSliders);
 }
 
 void Board::load_start_position() {
@@ -363,7 +408,7 @@ void Board::load_validated_position(const FenUtility::PositionInfo& positionInfo
         square_t capturedSquare = Square::ep_square(targetSquare);
         square_t originSquare = static_cast<square_t>(targetSquare + (m_isWhiteToMove ? 8 : -8));
         if (!Piece::is_empty(m_squares[targetSquare]) || !Piece::is_empty(m_squares[originSquare]) ||
-            m_squares[capturedSquare] != Piece::create(PieceType::Pawn, opponent_colour()))
+            m_squares[capturedSquare] != Piece::create(PieceType::Pawn, opponent_color()))
             throw std::invalid_argument("Invalid en-passant target");
         m_currentGameState.enPassantSquare = targetSquare;
         update_en_passant_hash();
@@ -386,28 +431,28 @@ void Board::update_en_passant_hash() {
 
 bool Board::is_en_passant_square_valid(square_t targetSquare) const {
     square_t capturedSquare = Square::ep_square(targetSquare);
-    PieceColor enemyColour = opponent_colour();
+    PieceColor enemyColor = opponent_color();
 
-    if (!Piece::is_empty(m_squares[targetSquare]) ||  m_squares[capturedSquare] != Piece::create(PieceType::Pawn, enemyColour))
+    if (!Piece::is_empty(m_squares[targetSquare]) ||  m_squares[capturedSquare] != Piece::create(PieceType::Pawn, enemyColor))
         return false;
 
-    bitboard_t candidates = Attacks::get_pawn_attacks(targetSquare, enemyColour) &
-        m_pieceBitboards[Piece::create(PieceType::Pawn, move_colour())];
+    bitboard_t candidates = Attacks::get_pawn_attacks(targetSquare, enemyColor) &
+        m_pieceBitboards[Piece::create(PieceType::Pawn, move_color())];
 
-    square_t kingSquare = m_kingSquare[move_colour_index()];
+    square_t kingSquare = m_kingSquare[move_color_index()];
     if (!Square::is_valid(kingSquare))
         return false;
 
-    bitboard_t enemyPawns = m_pieceBitboards[Piece::create(PieceType::Pawn, enemyColour)] & ~Square::bitboard(capturedSquare);
+    bitboard_t enemyPawns = m_pieceBitboards[Piece::create(PieceType::Pawn, enemyColor)] & ~Square::bitboard(capturedSquare);
 
     while (candidates != 0) {
         square_t startSquare = Bitboard::pop(candidates);
         bitboard_t occupied = (m_allPiecesBitboard &
             ~(Square::bitboard(startSquare) | Square::bitboard(capturedSquare))) | Square::bitboard(targetSquare);
 
-        if ((Attacks::get_pawn_attacks(kingSquare, move_colour()) & enemyPawns) ||
-            (Attacks::get_knight_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::Knight, enemyColour)]) ||
-            (Attacks::get_king_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::King, enemyColour)]) ||
+        if ((Attacks::get_pawn_attacks(kingSquare, move_color()) & enemyPawns) ||
+            (Attacks::get_knight_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::Knight, enemyColor)]) ||
+            (Attacks::get_king_attacks(kingSquare) & m_pieceBitboards[Piece::create(PieceType::King, enemyColor)]) ||
             (Attacks::get_bishop_attacks(kingSquare, occupied) & m_enemyDiagonalSliders) ||
             (Attacks::get_rook_attacks(kingSquare, occupied) & m_enemyOrthogonalSliders))
             continue;
@@ -421,20 +466,20 @@ void Board::place_piece(piece_t piece, square_t square) {
     assert(Square::is_valid(square) && Piece::is_empty(m_squares[square]));
     assert(piece >= 2 && piece < m_pieceBitboards.size());
 
-    int colourIndex = static_cast<int>(Piece::color(piece));
+    int colorIndex = static_cast<int>(Piece::color(piece));
     auto& count = m_pieceListCounts[piece];
     assert(count < m_allPieceLists[piece].size());
     m_pieceListIndices[square] = count;
     m_allPieceLists[piece][count++] = square;
 
     Bitboard::set(m_pieceBitboards[piece], square);
-    Bitboard::set(m_colourBitboards[colourIndex], square);
+    Bitboard::set(m_colorBitboards[colorIndex], square);
     m_squares[square] = piece;
 
     PieceType type = Piece::type(piece);
 
     if (type == PieceType::King)
-        m_kingSquare[colourIndex] = square;
+        m_kingSquare[colorIndex] = square;
     else if (type != PieceType::Pawn)
         m_totalPieceCountWithoutPawnsAndKings++;
 }
@@ -442,7 +487,7 @@ void Board::place_piece(piece_t piece, square_t square) {
 void Board::remove_piece(piece_t piece, square_t square) {
     assert(Square::is_valid(square) && m_squares[square] == piece && !Piece::is_empty(piece));
 
-    int colourIndex = static_cast<int>(Piece::color(piece));
+    int colorIndex = static_cast<int>(Piece::color(piece));
     auto& pieceList = m_allPieceLists[piece];
 
     uint8_t index = m_pieceListIndices[square];
@@ -453,12 +498,12 @@ void Board::remove_piece(piece_t piece, square_t square) {
     m_pieceListIndices[lastSquare] = index;
 
     Bitboard::clear(m_pieceBitboards[piece], square);
-    Bitboard::clear(m_colourBitboards[colourIndex], square);
+    Bitboard::clear(m_colorBitboards[colorIndex], square);
 
     m_squares[square] = Piece::create_empty();
     PieceType type = Piece::type(piece);
     if (type == PieceType::King)
-        m_kingSquare[colourIndex] = Square::None;
+        m_kingSquare[colorIndex] = Square::None;
     else if (type != PieceType::Pawn)
         m_totalPieceCountWithoutPawnsAndKings--;
 }
@@ -471,7 +516,7 @@ void Board::move_piece(piece_t piece, square_t startSquare, square_t targetSquar
     m_pieceListIndices[targetSquare] = index;
     bitboard_t changedSquares = Square::bitboard(startSquare) | Square::bitboard(targetSquare);
     m_pieceBitboards[piece] ^= changedSquares;
-    m_colourBitboards[colorIndex] ^= changedSquares;
+    m_colorBitboards[colorIndex] ^= changedSquares;
     m_squares[startSquare] = Piece::create_empty();
     m_squares[targetSquare] = piece;
     if (Piece::type(piece) == PieceType::King)
@@ -486,28 +531,28 @@ void Board::clear_rook_castle_right(square_t square, PieceColor color) {
 }
 
 void Board::update_slider_bitboards() {
-    PieceColor friendlyColour = move_colour();
-    PieceColor enemyColour = opponent_colour();
-    m_allPiecesBitboard = m_colourBitboards[WhiteIndex] | m_colourBitboards[BlackIndex];
+    PieceColor friendlyColor = move_color();
+    PieceColor enemyColor = opponent_color();
+    m_allPiecesBitboard = m_colorBitboards[WhiteIndex] | m_colorBitboards[BlackIndex];
 
-    m_friendlyOrthogonalSliders = m_pieceBitboards[Piece::create(PieceType::Rook, friendlyColour)] |
-        m_pieceBitboards[Piece::create(PieceType::Queen, friendlyColour)];
+    m_friendlyOrthogonalSliders = m_pieceBitboards[Piece::create(PieceType::Rook, friendlyColor)] |
+        m_pieceBitboards[Piece::create(PieceType::Queen, friendlyColor)];
 
-    m_friendlyDiagonalSliders = m_pieceBitboards[Piece::create(PieceType::Bishop, friendlyColour)] |
-        m_pieceBitboards[Piece::create(PieceType::Queen, friendlyColour)];
+    m_friendlyDiagonalSliders = m_pieceBitboards[Piece::create(PieceType::Bishop, friendlyColor)] |
+        m_pieceBitboards[Piece::create(PieceType::Queen, friendlyColor)];
 
-    m_enemyOrthogonalSliders = m_pieceBitboards[Piece::create(PieceType::Rook, enemyColour)] |
-        m_pieceBitboards[Piece::create(PieceType::Queen, enemyColour)];
+    m_enemyOrthogonalSliders = m_pieceBitboards[Piece::create(PieceType::Rook, enemyColor)] |
+        m_pieceBitboards[Piece::create(PieceType::Queen, enemyColor)];
 
-    m_enemyDiagonalSliders = m_pieceBitboards[Piece::create(PieceType::Bishop, enemyColour)] |
-        m_pieceBitboards[Piece::create(PieceType::Queen, enemyColour)];
+    m_enemyDiagonalSliders = m_pieceBitboards[Piece::create(PieceType::Bishop, enemyColor)] |
+        m_pieceBitboards[Piece::create(PieceType::Queen, enemyColor)];
 }
 
 void Board::initialize() {
     m_squares.fill(Piece::create_empty());
     m_kingSquare.fill(Square::None);
     m_pieceBitboards.fill(0);
-    m_colourBitboards.fill(0);
+    m_colorBitboards.fill(0);
 
     m_pieceListCounts.fill(0);
     m_pieceListIndices.fill(0);
@@ -559,7 +604,7 @@ piece_t Board::get_square(square_t square) const {
 const std::array<piece_t, Square::Count>& Board::squares() const { return m_squares; }
 square_t Board::king_square(PieceColor color) const { return m_kingSquare[static_cast<int>(color)]; }
 const std::array<bitboard_t, 14>& Board::piece_bitboards() const { return m_pieceBitboards; }
-const std::array<bitboard_t, 2>& Board::colour_bitboards() const { return m_colourBitboards; }
+const std::array<bitboard_t, 2>& Board::color_bitboards() const { return m_colorBitboards; }
 bitboard_t Board::all_pieces_bitboard() const { return m_allPiecesBitboard; }
 bitboard_t Board::friendly_orthogonal_sliders() const { return m_friendlyOrthogonalSliders; }
 bitboard_t Board::friendly_diagonal_sliders() const { return m_friendlyDiagonalSliders; }
@@ -579,10 +624,10 @@ std::span<const square_t> Board::knights(PieceColor color) const { return piece_
 std::span<const square_t> Board::pawns(PieceColor color) const { return piece_list(PieceType::Pawn, color); }
 
 bool Board::is_white_to_move() const { return m_isWhiteToMove; }
-PieceColor Board::move_colour() const { return m_isWhiteToMove ? PieceColor::White : PieceColor::Black; }
-PieceColor Board::opponent_colour() const { return m_isWhiteToMove ? PieceColor::Black : PieceColor::White; }
-int Board::move_colour_index() const { return static_cast<int>(move_colour()); }
-int Board::opponent_colour_index() const { return static_cast<int>(opponent_colour()); }
+PieceColor Board::move_color() const { return m_isWhiteToMove ? PieceColor::White : PieceColor::Black; }
+PieceColor Board::opponent_color() const { return m_isWhiteToMove ? PieceColor::Black : PieceColor::White; }
+int Board::move_color_index() const { return static_cast<int>(move_color()); }
+int Board::opponent_color_index() const { return static_cast<int>(opponent_color()); }
 int Board::ply_count() const { return m_plyCount; }
 int Board::fifty_move_counter() const { return m_currentGameState.fiftyMoveCounter; }
 uint64_t Board::zobrist_key() const { return m_currentGameState.zobristKey; }

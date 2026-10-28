@@ -92,28 +92,28 @@ bitboard_t MoveGenerator::opponent_attack_map() const { return m_opponentAttackM
 bool MoveGenerator::finished(const MoveList& moves) const { return m_oneMoveOnly && !moves.is_empty(); }
 
 bitboard_t MoveGenerator::friendly_piece_board(PieceType type) const {
-    return m_board->piece_bitboards()[Piece::create(type, m_friendlyColour)];
+    return m_board->piece_bitboards()[Piece::create(type, m_friendlyColor)];
 }
 
 bitboard_t MoveGenerator::enemy_piece_board(PieceType type) const {
-    return m_board->piece_bitboards()[Piece::create(type, m_opponentColour)];
+    return m_board->piece_bitboards()[Piece::create(type, m_opponentColor)];
 }
 
 void MoveGenerator::initialize(const Board& board, GenerationMode mode, bool oneMoveOnly) {
     bool attacksReady = m_board != nullptr && m_positionKey == board.zobrist_key() &&
-        m_friendlyColour == board.move_colour() && m_positionPieces == board.piece_bitboards();
+        m_friendlyColor == board.move_color() && m_positionPieces == board.piece_bitboards();
     m_board = &board;
     m_generationMode = mode;
     m_oneMoveOnly = oneMoveOnly;
 
-    m_friendlyColour = board.move_colour();
-    m_opponentColour = board.opponent_colour();
+    m_friendlyColor = board.move_color();
+    m_opponentColor = board.opponent_color();
 
-    m_friendlyKingSquare = board.king_square(m_friendlyColour);
+    m_friendlyKingSquare = board.king_square(m_friendlyColor);
     assert(Square::is_valid(m_friendlyKingSquare));
 
-    m_friendlyPieces = board.colour_bitboards()[board.move_colour_index()];
-    m_enemyPieces = board.colour_bitboards()[board.opponent_colour_index()];
+    m_friendlyPieces = board.color_bitboards()[board.move_color_index()];
+    m_enemyPieces = board.color_bitboards()[board.opponent_color_index()];
     m_allPieces = board.all_pieces_bitboard();
 
     m_moveMask = (mode == GenerationMode::CapturesOnly || mode == GenerationMode::Tactical) ? m_enemyPieces :
@@ -130,7 +130,7 @@ void MoveGenerator::initialize(const Board& board, GenerationMode mode, bool one
 
 void MoveGenerator::calculate_attack_data() {
     bitboard_t checkers = Attacks::get_knight_attacks(m_friendlyKingSquare) & enemy_piece_board(PieceType::Knight);
-    checkers |= Attacks::get_pawn_attacks(m_friendlyKingSquare, m_friendlyColour) & enemy_piece_board(PieceType::Pawn);
+    checkers |= Attacks::get_pawn_attacks(m_friendlyKingSquare, m_friendlyColor) & enemy_piece_board(PieceType::Pawn);
     checkers |= Attacks::get_king_attacks(m_friendlyKingSquare) & enemy_piece_board(PieceType::King);
 
     bitboard_t slidingCheckers =
@@ -169,7 +169,7 @@ bitboard_t MoveGenerator::calculate_pin_rays(bool orthogonal) const {
 void MoveGenerator::calculate_opponent_attack_map() {
     bitboard_t occupied = m_allPieces & ~Square::bitboard(m_friendlyKingSquare);
 
-    m_opponentAttackMap = Attacks::get_pawn_attacks(enemy_piece_board(PieceType::Pawn), m_opponentColour);
+    m_opponentAttackMap = Attacks::get_pawn_attacks(enemy_piece_board(PieceType::Pawn), m_opponentColor);
 
     bitboard_t knights = enemy_piece_board(PieceType::Knight);
     bitboard_t kings = enemy_piece_board(PieceType::King);
@@ -222,20 +222,20 @@ void MoveGenerator::generate_king_moves(MoveList& moves) {
 }
 
 void MoveGenerator::generate_castling_moves(MoveList& moves) {
-    if (m_friendlyKingSquare != Square::relative_square(Square::E1, m_friendlyColour)) return;
+    if (m_friendlyKingSquare != Square::relative_square(Square::E1, m_friendlyColor)) return;
 
     const GameState& state = m_board->current_game_state();
     for (bool kingside : { true, false }) {
-        if (!(kingside ? state.has_kingside_castle_right(m_friendlyColour) :
-            state.has_queenside_castle_right(m_friendlyColour))) continue;
+        if (!(kingside ? state.has_kingside_castle_right(m_friendlyColor) :
+            state.has_queenside_castle_right(m_friendlyColor))) continue;
 
-        square_t rookSquare = Square::relative_square(kingside ? Square::H1 : Square::A1, m_friendlyColour);
-        if (m_board->get_square(rookSquare) != Piece::create(PieceType::Rook, m_friendlyColour)) continue;
+        square_t rookSquare = Square::relative_square(kingside ? Square::H1 : Square::A1, m_friendlyColor);
+        if (m_board->get_square(rookSquare) != Piece::create(PieceType::Rook, m_friendlyColor)) continue;
 
         bitboard_t emptyPath = squares_between(m_friendlyKingSquare, rookSquare) & ~Square::bitboard(rookSquare);
         if (emptyPath & m_allPieces) continue;
 
-        square_t kingTarget = Square::castling_king_square(kingside, m_friendlyColour);
+        square_t kingTarget = Square::castling_king_square(kingside, m_friendlyColor);
         if (squares_between(m_friendlyKingSquare, kingTarget) & m_opponentAttackMap) continue;
 
         moves.add(Move::create<Move::Type::Castling>(m_friendlyKingSquare, rookSquare));
@@ -296,9 +296,9 @@ void MoveGenerator::generate_promotions(MoveList& moves, square_t startSquare, s
 }
 
 void MoveGenerator::generate_pawn_moves(MoveList& moves) {
-    int pushOffset = m_friendlyColour == PieceColor::White ? 8 : -8;
-    int promotionRank = m_friendlyColour == PieceColor::White ? 7 : 0;
-    int startingRank = m_friendlyColour == PieceColor::White ? 1 : 6;
+    int pushOffset = m_friendlyColor == PieceColor::White ? 8 : -8;
+    int promotionRank = m_friendlyColor == PieceColor::White ? 7 : 0;
+    int startingRank = m_friendlyColor == PieceColor::White ? 1 : 6;
 
     bitboard_t pawns = friendly_piece_board(PieceType::Pawn);
     while (pawns != 0) {
@@ -306,7 +306,7 @@ void MoveGenerator::generate_pawn_moves(MoveList& moves) {
         bitboard_t startBit = Square::bitboard(startSquare);
 
         if (m_generationMode != GenerationMode::QuietOnly && !(startBit & m_orthogonalPinRays)) {
-            bitboard_t captures = Attacks::get_pawn_attacks(startSquare, m_friendlyColour) &
+            bitboard_t captures = Attacks::get_pawn_attacks(startSquare, m_friendlyColor) &
                 m_enemyPieces & ~enemy_piece_board(PieceType::King) & m_checkRayBitmask;
 
             if (startBit & m_diagonalPinRays) captures &= m_diagonalPinRays;
@@ -359,15 +359,15 @@ void MoveGenerator::generate_pawn_moves(MoveList& moves) {
 
 void MoveGenerator::generate_en_passant_moves(MoveList& moves, square_t targetSquare) {
     if (!Square::is_valid(targetSquare) ||
-        Square::rank(targetSquare) != (m_friendlyColour == PieceColor::White ? 5 : 2) ||
+        Square::rank(targetSquare) != (m_friendlyColor == PieceColor::White ? 5 : 2) ||
         !Piece::is_empty(m_board->get_square(targetSquare)) || in_double_check()) return;
 
     square_t capturedSquare = Square::ep_square(targetSquare);
 
-    if (m_board->get_square(capturedSquare) != Piece::create(PieceType::Pawn, m_opponentColour)) return;
+    if (m_board->get_square(capturedSquare) != Piece::create(PieceType::Pawn, m_opponentColor)) return;
     if (!(m_checkRayBitmask & (Square::bitboard(capturedSquare) | Square::bitboard(targetSquare)))) return;
 
-    bitboard_t candidates = Attacks::get_pawn_attacks(targetSquare, m_opponentColour) &
+    bitboard_t candidates = Attacks::get_pawn_attacks(targetSquare, m_opponentColor) &
         friendly_piece_board(PieceType::Pawn) & ~m_orthogonalPinRays;
 
     while (candidates != 0) {
@@ -389,7 +389,7 @@ bool MoveGenerator::is_en_passant_legal(square_t startSquare, square_t targetSqu
 
     bitboard_t enemyPawns = enemy_piece_board(PieceType::Pawn) & ~Square::bitboard(capturedSquare);
 
-    return !(Attacks::get_pawn_attacks(m_friendlyKingSquare, m_friendlyColour) & enemyPawns) &&
+    return !(Attacks::get_pawn_attacks(m_friendlyKingSquare, m_friendlyColor) & enemyPawns) &&
         !(Attacks::get_knight_attacks(m_friendlyKingSquare) & enemy_piece_board(PieceType::Knight)) &&
         !(Attacks::get_king_attacks(m_friendlyKingSquare) & enemy_piece_board(PieceType::King)) &&
         !(Attacks::get_rook_attacks(m_friendlyKingSquare, occupied) & m_board->enemy_orthogonal_sliders()) &&

@@ -193,14 +193,14 @@ void Application::print_identification() {
     send("option name Futility Pruning type check default true");
     send("option name Late Move Reductions type check default true");
     send("option name SEE Pruning type check default true");
-    send("option name Continuation History type check default false");
+    send("option name Continuation History type check default true");
     send("option name Counter Moves type check default false");
     send("option name Capture History type check default false");
     send("option name Pawn History type check default false");
-    send("option name Singular Extensions type check default false");
+    send("option name Singular Extensions type check default true");
     send("option name ProbCut type check default false");
-    send("option name Razoring type check default false");
-    send("option name Correction History type check default false");
+    send("option name Razoring type check default true");
+    send("option name Correction History type check default true");
     send("uciok");
 }
 

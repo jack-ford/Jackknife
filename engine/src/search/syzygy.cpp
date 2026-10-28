@@ -25,8 +25,8 @@ struct Position {
     unsigned ep;
 
     explicit Position(const chess::Board& board):
-        white(board.colour_bitboards()[chess::Board::WhiteIndex]),
-        black(board.colour_bitboards()[chess::Board::BlackIndex]),
+        white(board.color_bitboards()[chess::Board::WhiteIndex]),
+        black(board.color_bitboards()[chess::Board::BlackIndex]),
         ep(board.current_game_state().enPassantHashed ? board.current_game_state().enPassantSquare : 0) {
         const auto& bitboards = board.piece_bitboards();
         for (int type = 1; type <= 6; ++type)

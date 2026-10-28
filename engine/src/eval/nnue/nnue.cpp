@@ -40,13 +40,12 @@ void activate(const Accumulator& accumulator, PieceColor sideToMove, int16_t* ou
 
 int evaluate_activated(const Accumulator& accumulator, PieceColor sideToMove, const int16_t* activated) {
     const auto& weights = network();
+    alignas(32) int32_t sums[HiddenSize];
     alignas(32) int16_t hidden[HiddenSize];
 
-    for (int i = 0; i < HiddenSize; ++i) {
-        int32_t sum = weights.hiddenBiases[i] +
-            kernels::dot_product(activated, weights.hiddenWeights[i], 2 * AccumulatorSize);
-        hidden[i] = kernels::screlu(std::max(0, sum) / WeightScale);
-    }
+    kernels::hidden_layer(activated, &weights.hiddenWeights[0][0], sums);
+    for (int i = 0; i < HiddenSize; ++i)
+        hidden[i] = kernels::screlu(std::max(0, sums[i] + weights.hiddenBiases[i]) / WeightScale);
 
     int us = static_cast<int>(sideToMove);
 
@@ -67,16 +66,16 @@ Changes describe_move(const Board& board, move_t move) {
 
     if (Move::type(move) == Move::Type::Castling) {
         // The engine encodes castling as king-from -> rook-from.
-        piece_t rook = Piece::create(PieceType::Rook, board.move_colour());
+        piece_t rook = Piece::create(PieceType::Rook, board.move_color());
         changes.removed = { rook, to };
-        changes.added = { rook, Square::castling_rook_square(to > from, board.move_colour()) };
+        changes.added = { rook, Square::castling_rook_square(to > from, board.move_color()) };
         return changes;
     }
 
     if (Piece::type(piece) != PieceType::King) {
         changes.removed = { piece, from };
         changes.added = { Move::type(move) == Move::Type::Promotion ?
-            Piece::create(Move::promotion_piece(move), board.move_colour()) : piece, to };
+            Piece::create(Move::promotion_piece(move), board.move_color()) : piece, to };
     }
 
     square_t capturedSquare = Move::type(move) == Move::Type::EnPassant ? Square::ep_square(to) : to;

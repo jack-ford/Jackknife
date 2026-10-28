@@ -7,6 +7,7 @@
 #include <iostream>
 #include <random>
 #include <stdexcept>
+#include <vector>
 
 #ifdef CHESS_NNUE_REFERENCE
 void verify_casanchess(const chess::Board& board);
@@ -24,7 +25,7 @@ void verify(const Board& board) {
     eval::nnue::Accumulator fresh;
     eval::nnue::refresh(fresh, board);
     require(fresh == board.nnue_accumulator(), "incremental accumulator differs from full refresh");
-    auto output = eval::nnue::evaluate_outputs(fresh, board.move_colour());
+    auto output = eval::nnue::evaluate_outputs(fresh, board.move_color());
     require(output.eval == eval::evaluate(board), "evaluation entry points disagree");
 #ifdef CHESS_NNUE_REFERENCE
     verify_casanchess(board);
@@ -52,6 +53,20 @@ void test_kernels() {
             int64_t expected = 0;
             for (int i = 0; i < size; ++i) expected += values[i] * weights[i];
             require(kernels::dot_product(values, weights, size) == expected, "SIMD dot product differs from scalar");
+        }
+    }
+    constexpr int InputSize = 2 * AccumulatorSize;
+    alignas(32) int16_t activations[InputSize];
+    std::vector<int16_t> rows(HiddenSize * InputSize);
+    alignas(32) int32_t sums[HiddenSize];
+    for (int trial = 0; trial < 20; ++trial) {
+        for (int16_t& value : activations) value = static_cast<int16_t>(random() % (ActivationScale + 1));
+        for (int16_t& weight : rows) weight = static_cast<int16_t>(static_cast<int>(random() % 65536) - 32768);
+        kernels::hidden_layer(activations, rows.data(), sums);
+        for (int row = 0; row < HiddenSize; ++row) {
+            int64_t expected = 0;
+            for (int i = 0; i < InputSize; ++i) expected += activations[i] * rows[row * InputSize + i];
+            require(sums[row] == expected, "SIMD hidden layer differs from scalar");
         }
     }
 }

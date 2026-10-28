@@ -49,7 +49,7 @@ void Search::reward_quiet(const Board& board, move_t move, int depth, int ply, c
     }
 
     int bonus = std::min(HistoryBonusMax, depth * depth * HistoryBonusScale);
-    auto& history = m_history[board.move_colour_index()];
+    auto& history = m_history[board.move_color_index()];
 
     if (m_options.counterMoves && m_previousMoves[ply] != 0) {
         m_counterMoves[m_previousPieces[ply]][Move::to(m_previousMoves[ply])] = move;
@@ -76,9 +76,9 @@ void Search::reward_quiet(const Board& board, move_t move, int depth, int ply, c
 }
 
 std::size_t Search::continuation_index(const Board& board, move_t move, int ply) const {
-    uint64_t previous = m_previousPieces[ply] * 64 + Move::to(m_previousMoves[ply]);
-    uint64_t current = board.get_square(Move::from(move)) * 64 + Move::to(move);
-    return mix_key(previous * PieceSquareCount + current) & (m_continuationHistory.size() - 1);
+    std::size_t previous = m_previousPieces[ply] * Square::Count + Move::to(m_previousMoves[ply]);
+    std::size_t current = board.get_square(Move::from(move)) * Square::Count + Move::to(move);
+    return previous * PieceSquareCount + current;
 }
 
 std::size_t Search::pawn_index(const Board& board, move_t move) const {
@@ -89,7 +89,7 @@ std::size_t Search::pawn_index(const Board& board, move_t move) const {
 }
 
 int Search::history_score(const Board& board, move_t move, int ply) const {
-    int score = m_options.historyHeuristic ? m_history[board.move_colour_index()][Move::from(move)][Move::to(move)] : 0;
+    int score = m_options.historyHeuristic ? m_history[board.move_color_index()][Move::from(move)][Move::to(move)] : 0;
     if (m_options.continuationHistory && m_previousMoves[ply] != 0)
         score += m_continuationHistory[continuation_index(board, move, ply)];
     if (m_options.pawnHistory)
@@ -122,7 +122,7 @@ int Search::corrected_score(const Board& board, int score) const {
     const auto& pieces = board.piece_bitboards();
     uint64_t key = mix_key(pieces[Piece::create(PieceType::Pawn, PieceColor::Black)]) ^
         pieces[Piece::create(PieceType::Pawn, PieceColor::White)];
-    return std::clamp(score + m_correctionHistory[board.move_colour_index()][key & (HistoryTableSize - 1)] / CorrectionScale,
+    return std::clamp(score + m_correctionHistory[board.move_color_index()][key & (HistoryTableSize - 1)] / CorrectionScale,
         -TablebaseScore + 1, TablebaseScore - 1);
 }
 
@@ -132,7 +132,7 @@ void Search::update_correction(const Board& board, int depth, int score, int sta
     const auto& pieces = board.piece_bitboards();
     uint64_t key = mix_key(pieces[Piece::create(PieceType::Pawn, PieceColor::Black)]) ^
         pieces[Piece::create(PieceType::Pawn, PieceColor::White)];
-    int& value = m_correctionHistory[board.move_colour_index()][key & (HistoryTableSize - 1)];
+    int& value = m_correctionHistory[board.move_color_index()][key & (HistoryTableSize - 1)];
     int target = std::clamp((score - staticScore) * CorrectionScale, -HistoryLimit, HistoryLimit);
     int weight = std::min(depth + 1, CorrectionMaxWeight);
     value += (target - value) * weight / CorrectionScale;

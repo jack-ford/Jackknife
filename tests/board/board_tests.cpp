@@ -17,7 +17,7 @@ static void require(bool condition, const char* message) {
 
 static void verify(const Board& board) {
     std::array<bitboard_t, 14> pieceBoards {};
-    std::array<bitboard_t, 2> colourBoards {};
+    std::array<bitboard_t, 2> colorBoards {};
     int materialCount = 0;
     uint64_t key = Zobrist::castling(board.current_game_state().castlingRights);
     if (board.is_white_to_move()) key ^= Zobrist::side_to_move();
@@ -28,7 +28,7 @@ static void verify(const Board& board) {
         piece_t piece = board.get_square(square);
         if (Piece::is_empty(piece)) continue;
         pieceBoards[piece] |= Square::bitboard(square);
-        colourBoards[static_cast<int>(Piece::color(piece))] |= Square::bitboard(square);
+        colorBoards[static_cast<int>(Piece::color(piece))] |= Square::bitboard(square);
         key ^= Zobrist::piece(piece, square);
         if (Piece::type(piece) != PieceType::King && Piece::type(piece) != PieceType::Pawn)
             ++materialCount;
@@ -36,8 +36,8 @@ static void verify(const Board& board) {
             require(board.king_square(Piece::color(piece)) == square, "king square mismatch");
     }
     require(pieceBoards == board.piece_bitboards(), "piece bitboards mismatch");
-    require(colourBoards == board.colour_bitboards(), "colour bitboards mismatch");
-    require((colourBoards[0] | colourBoards[1]) == board.all_pieces_bitboard(), "occupancy mismatch");
+    require(colorBoards == board.color_bitboards(), "color bitboards mismatch");
+    require((colorBoards[0] | colorBoards[1]) == board.all_pieces_bitboard(), "occupancy mismatch");
     require(key == board.zobrist_key(), "incremental hash mismatch");
     require(materialCount == board.total_piece_count_without_pawns_and_kings(), "material count mismatch");
     for (PieceColor color : { PieceColor::Black, PieceColor::White }) {
@@ -56,16 +56,27 @@ static void verify(const Board& board) {
             require(mask == pieceBoards[Piece::create(types[i], color)], "piece list mismatch");
         }
     }
-    bitboard_t friendlyQueens = pieceBoards[Piece::create(PieceType::Queen, board.move_colour())];
-    bitboard_t enemyQueens = pieceBoards[Piece::create(PieceType::Queen, board.opponent_colour())];
+    bitboard_t friendlyQueens = pieceBoards[Piece::create(PieceType::Queen, board.move_color())];
+    bitboard_t enemyQueens = pieceBoards[Piece::create(PieceType::Queen, board.opponent_color())];
     require(board.friendly_orthogonal_sliders() ==
-        (friendlyQueens | pieceBoards[Piece::create(PieceType::Rook, board.move_colour())]), "friendly rook mask");
+        (friendlyQueens | pieceBoards[Piece::create(PieceType::Rook, board.move_color())]), "friendly rook mask");
     require(board.friendly_diagonal_sliders() ==
-        (friendlyQueens | pieceBoards[Piece::create(PieceType::Bishop, board.move_colour())]), "friendly bishop mask");
+        (friendlyQueens | pieceBoards[Piece::create(PieceType::Bishop, board.move_color())]), "friendly bishop mask");
     require(board.enemy_orthogonal_sliders() ==
-        (enemyQueens | pieceBoards[Piece::create(PieceType::Rook, board.opponent_colour())]), "enemy rook mask");
+        (enemyQueens | pieceBoards[Piece::create(PieceType::Rook, board.opponent_color())]), "enemy rook mask");
     require(board.enemy_diagonal_sliders() ==
-        (enemyQueens | pieceBoards[Piece::create(PieceType::Bishop, board.opponent_colour())]), "enemy bishop mask");
+        (enemyQueens | pieceBoards[Piece::create(PieceType::Bishop, board.opponent_color())]), "enemy bishop mask");
+}
+
+static void verify_gives_check(Board& board) {
+    MoveGenerator generator;
+    for (move_t move : generator.generate_moves(board)) {
+        bool predicted = board.gives_check(move);
+        board.make_move(move, true);
+        bool actual = board.is_in_check();
+        board.unmake_move(move, true);
+        require(predicted == actual, "gives_check differs from make_move");
+    }
 }
 
 static void round_trip(Board& board, move_t move, bool inSearch = false) {
@@ -305,6 +316,13 @@ int main() {
         searchBoard.unmake_move();
         verify(searchBoard);
 
+        // Castling rook checks, en-passant discovered checks, and promotion checks.
+        for (std::string_view fen : { "5k2/8/8/8/8/8/8/4K2R w K - 0 1", "8/8/8/k1pP3R/8/8/8/4K3 w - c6 0 1",
+            "4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1" }) {
+            Board checkBoard(fen);
+            verify_gives_check(checkBoard);
+        }
+
         // Exercise indexed piece lists, canonical keys, and undo over varied legal play.
         uint64_t randomState = 0x123456789ABCDEFULL;
         for (int game = 0; game < 12; ++game) {
@@ -317,6 +335,7 @@ int main() {
                 randomState ^= randomState << 13;
                 randomState ^= randomState >> 7;
                 randomState ^= randomState << 17;
+                verify_gives_check(randomBoard);
                 randomBoard.make_move(moves[static_cast<int>(randomState % moves.size())], true);
                 verify(randomBoard);
                 Board roundTrip(randomBoard.current_fen());

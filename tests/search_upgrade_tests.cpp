@@ -135,6 +135,9 @@ void test_search_features() {
     options.counterMoves = false;
     options.captureHistory = false;
     options.pawnHistory = false;
+    options.razoring = false;
+    options.correctionHistory = false;
+    options.singularExtensions = false;
     engine = std::make_unique<search::Search>(1, options);
     limits.depth = 4;
     auto result = engine->iterative_deepening(Board {}, limits);

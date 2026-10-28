@@ -44,16 +44,26 @@ void Search::clear() {
 void Search::advance_history(const Board& board, int ply, move_t move) {
     m_previousMoves[ply + 1] = move;
     m_previousPieces[ply + 1] = board.get_square(Move::to(move));
-    m_historyKeys[ply + 1] = board.repetition_position_history().size() <= 1 ? 0 : m_historyKeys[ply];
-    m_historyKeys[ply + 1] += mix_key(board.zobrist_key() + HistorySeed);
 }
 
-uint64_t Search::context_key(const Board& board, int ply, int extensions, square_t recaptureSquare, bool nullSearch, bool allowNull) const {
-    uint64_t context = nullSearch ? NullContextSeed :
-        m_historyKeys[ply] ^ mix_key(static_cast<uint64_t>(board.fifty_move_counter()) + HistorySeed);
+uint64_t Search::context_key(const NodeContext& node) const {
+    // Entries are shared across paths; only searches that exclude a move need their own.
+    return node.excludedMove == 0 ? 0 : mix_key(node.excludedMove + ExcludedMoveSeed);
+}
 
-    context ^= mix_key(static_cast<uint64_t>(extensions) * (Square::Count + 1) + recaptureSquare);
-    return allowNull ? context : context ^ VerificationContextSeed;
+bool Search::is_repetition_draw(const Board& board) const {
+    // History entries are consecutive plies since the last irreversible or null move.
+    auto history = board.repetition_position_history();
+    int last = static_cast<int>(history.size()) - 1;
+    int occurrences = 0;
+    for (int distance = 2; distance <= last; distance += 2) {
+        if (history[last - distance] != board.zobrist_key())
+            continue;
+        // One repetition inside the search tree is enough; game history needs threefold.
+        if (board.ply_count() - distance > m_rootPly || ++occurrences == 2)
+            return true;
+    }
+    return false;
 }
 
 HashProbe Search::probe_hash(const Board& board, uint64_t context, int ply) {
@@ -87,9 +97,16 @@ bool Search::should_stop() {
     return m_stopped;
 }
 
-bool Search::is_draw(const Board& board, bool nullSearch) const {
-    return GameResultUtility::is_insufficient_material(board) || (!nullSearch &&
-        (GameResultUtility::is_half_move_draw(board) || GameResultUtility::is_repetition(board, 3)));
+bool Search::is_draw(const Board& board, bool nullSearch) {
+    if (GameResultUtility::is_insufficient_material(board))
+        return true;
+    if (nullSearch)
+        return false;
+    if (is_repetition_draw(board))
+        return true;
+    // Checkmate delivered on the move that reaches the fifty-move limit takes precedence.
+    return GameResultUtility::is_half_move_draw(board) &&
+        (!board.is_in_check() || m_generator.has_legal_moves(board));
 }
 
 void Search::update_pv(int ply, move_t move) {
@@ -119,7 +136,7 @@ int Search::root_max(Board& board, int depth, int alpha, int beta, const std::ve
 
     move_t bestMove = 0;
     m_staticScores[0] = eval::evaluate(board);
-    uint64_t context = context_key(board, 0, extension, Square::None, false);
+    uint64_t context = context_key({});
 
     for (auto& rootMove : m_rootMoves) {
         move_t move = rootMove.move;
@@ -136,8 +153,8 @@ int Search::root_max(Board& board, int depth, int alpha, int beta, const std::ve
         advance_history(board, 0, move);
         square_t recaptureSquare = capture ? Move::to(move) : Square::None;
 
-        int score = pvs(board, depth - 1 + extension, alpha, beta, 1,
-            extension, recaptureSquare, true, false, true, searched == 0, 0);
+        NodeContext child {.ply = 1, .extensions = extension, .recaptureSquare = recaptureSquare, .pvNode = true};
+        int score = pvs(board, depth - 1 + extension, alpha, beta, child, searched == 0, 0);
 
         board.unmake_move(move, true);
         if (m_stopped)
@@ -178,10 +195,7 @@ Result Search::iterative_deepening(Board board, const Limits& limits, std::stop_
 
     m_hash.new_search();
     m_staticScores.fill(Infinity);
-    m_historyKeys[0] = 0;
-
-    for (uint64_t key : board.repetition_position_history())
-        m_historyKeys[0] += mix_key(key + HistorySeed);
+    m_rootPly = board.ply_count();
 
     m_stopped = false;
     m_killers = {};
@@ -260,7 +274,7 @@ Result Search::iterative_deepening(Board board, const Limits& limits, std::stop_
         std::vector<move_t> excluded;
         for (int index = 0; index < count; index++) {
             int center = index < static_cast<int>(result.variations.size()) ? result.variations[index].score : result.score;
-            move_t preferred = index < static_cast<int>(result.variations.size()) ? result.variations[index].moves[0] : probe_hash(board, context_key(board, 0, 0, Square::None, false), 0).move;
+            move_t preferred = index < static_cast<int>(result.variations.size()) ? result.variations[index].moves[0] : probe_hash(board, context_key({}), 0).move;
 
             int score = aspiration_window(board, depth, center, excluded, preferred);
             if (m_stopped)

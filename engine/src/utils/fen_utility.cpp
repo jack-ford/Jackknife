@@ -167,8 +167,8 @@ std::string flip_fen(std::string_view fen) {
                     flippedFen += static_cast<char>('0' + numEmptyFiles);
                     numEmptyFiles = 0;
                 }
-                PieceColor colour = Piece::color(piece) == PieceColor::White ? PieceColor::Black : PieceColor::White;
-                flippedFen += Piece::symbol(Piece::create(Piece::type(piece), colour));
+                PieceColor color = Piece::color(piece) == PieceColor::White ? PieceColor::Black : PieceColor::White;
+                flippedFen += Piece::symbol(Piece::create(Piece::type(piece), color));
             }
         }
 

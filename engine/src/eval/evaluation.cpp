@@ -10,7 +10,7 @@ int piece_value(PieceType type) {
 }
 
 int evaluate(const Board& board) {
-    return nnue::evaluate(board.nnue_accumulator(), board.move_colour());
+    return nnue::evaluate(board.nnue_accumulator(), board.move_color());
 }
 
 }

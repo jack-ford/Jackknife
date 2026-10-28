@@ -3,8 +3,26 @@ cmake_minimum_required(VERSION 3.24)
 project(ChessEngineV2 VERSION 0.1.0 LANGUAGES CXX)
 
 option(CHESS_BUILD_GUI "Build the SDL3 desktop GUI" ON)
-option(CHESS_NNUE_AVX2 "Use AVX2 NNUE kernels (requires an AVX2-capable CPU)" ON)
+option(CHESS_AVX2 "Build for AVX2-capable CPUs: AVX2 NNUE kernels and native bit-manipulation instructions" ON)
 option(CHESS_BUILD_BENCHMARKS "Build the core engine benchmark suite" ON)
+option(CHESS_ENABLE_LTO "Use link-time optimization for Release builds when supported" ON)
+
+if(CHESS_ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT CHESS_LTO_SUPPORTED OUTPUT CHESS_LTO_ERROR)
+    if(CHESS_LTO_SUPPORTED)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    else()
+        message(WARNING "Link-time optimization is unavailable: ${CHESS_LTO_ERROR}")
+    endif()
+endif()
+
+# Search keeps per-ply move lists on the stack; reserve room for MaxPly plies on
+# every thread. Other platforms' default 8 MiB thread stacks already suffice.
+set(CHESS_STACK_BYTES 8388608)
+if(MSVC)
+    add_link_options(/STACK:${CHESS_STACK_BYTES})
+endif()
 
 set(NNUE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/data/network-20260910.nnue")
 file(SHA256 "${NNUE_FILE}" NNUE_HASH)
@@ -40,7 +58,6 @@ add_library(chess_engine
     engine/src/search/probcut.cpp
     engine/src/search/negamax.cpp
     engine/src/search/quiescence.cpp
-    engine/src/search/move_picker.cpp
     engine/src/search/move_ordering.cpp
     engine/src/utils/search_utility.cpp
     engine/src/search/transposition_table.cpp
@@ -69,13 +86,14 @@ else()
 endif()
 target_link_libraries(chess_engine PRIVATE fathom)
 
-if(CHESS_NNUE_AVX2)
+# Public so that inline engine code compiles identically in every consumer.
+if(CHESS_AVX2)
     if(MSVC)
-        set_source_files_properties(engine/src/eval/nnue/kernels.cpp PROPERTIES COMPILE_OPTIONS /arch:AVX2)
+        target_compile_options(chess_engine PUBLIC /arch:AVX2)
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i.86)$")
-        set_source_files_properties(engine/src/eval/nnue/kernels.cpp PROPERTIES COMPILE_OPTIONS -mavx2)
+        target_compile_options(chess_engine PUBLIC -march=x86-64-v3)
     else()
-        message(FATAL_ERROR "AVX2 is unavailable on this target; configure with -DCHESS_NNUE_AVX2=OFF")
+        message(FATAL_ERROR "AVX2 is unavailable on this target; configure with -DCHESS_AVX2=OFF")
     endif()
 endif()
 
@@ -88,14 +106,11 @@ target_link_libraries(chess_uci_lib PUBLIC chess_engine)
 add_executable(chess_uci uci/main.cpp)
 target_link_libraries(chess_uci PRIVATE chess_uci_lib)
 
-add_executable(chess_bench benchmarking/search_bench.cpp)
-target_link_libraries(chess_bench PRIVATE chess_engine)
-
 if(CHESS_BUILD_BENCHMARKS)
     add_executable(chess_benchmark benchmarking/benchmark.cpp)
     target_link_libraries(chess_benchmark PRIVATE chess_engine)
-    if(CHESS_NNUE_AVX2)
-        target_compile_definitions(chess_benchmark PRIVATE CHESS_NNUE_AVX2_ENABLED)
+    if(CHESS_AVX2)
+        target_compile_definitions(chess_benchmark PRIVATE CHESS_AVX2_ENABLED)
     endif()
 endif()
 
@@ -119,6 +134,12 @@ if(CHESS_BUILD_GUI)
 endif()
 
 include(CTest)
+# The tactical suite runner serves both the test suite and benchmarking.
+if(BUILD_TESTING OR CHESS_BUILD_BENCHMARKS)
+    add_executable(chess_bench benchmarking/search_bench.cpp)
+    target_link_libraries(chess_bench PRIVATE chess_engine)
+endif()
+
 if(BUILD_TESTING)
     add_test(NAME tactical_suite COMMAND chess_bench 4 "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/tactics.txt")
     add_executable(network_loading_tests tests/network_loading_tests.cpp)

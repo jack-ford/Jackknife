@@ -26,14 +26,10 @@ int main(int argc, char** argv) {
         }
         search::Options options;
         if (argc > 3 && std::string(argv[3]) == "experimental") {
-            options.continuationHistory = true;
             options.counterMoves = true;
             options.captureHistory = true;
             options.pawnHistory = true;
-            options.singularExtensions = true;
             options.probCut = true;
-            options.razoring = true;
-            options.correctionHistory = true;
         }
         std::vector<std::string> positions {
             std::string(chess::FenUtility::StartPositionFen),
