@@ -24,7 +24,7 @@ if(MSVC)
     add_link_options(/STACK:${CHESS_STACK_BYTES})
 endif()
 
-set(NNUE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/data/network-20260910.nnue")
+set(NNUE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/data/trained_network.nnue")
 file(SHA256 "${NNUE_FILE}" NNUE_HASH)
 if(NOT NNUE_HASH STREQUAL "b17d5a73bb312345c442c72d7f87474cfa3b20e9c42889efc8184b17c211560f")
     message(FATAL_ERROR "Casanchess NNUE asset checksum mismatch")

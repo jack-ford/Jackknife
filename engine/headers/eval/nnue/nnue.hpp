@@ -19,7 +19,6 @@ struct Changes {
     PieceSquare added;
 };
 
-// Describe before making the move; update after the board is in its new state.
 Changes describe_move(const chess::Board& board, chess::move_t move);
 void update(Accumulator& accumulator, const chess::Board& board, const Changes& changes);
 void refresh(Accumulator& accumulator, const chess::Board& board);
