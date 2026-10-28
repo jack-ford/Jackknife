@@ -7,6 +7,7 @@
 #include <exception>
 #include <iostream>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -95,7 +96,9 @@ std::string option_value(std::string_view value) {
 
 }
 
-Application::Application(): m_board(chess::FenUtility::StartPositionFen) {
+Application::Application(std::string defaultBookFile):
+    m_defaultBookFile(std::move(defaultBookFile)), m_board(chess::FenUtility::StartPositionFen) {
+    m_settings.bookFile = m_defaultBookFile;
     rebuild_search();
 }
 
@@ -184,7 +187,7 @@ void Application::print_identification() {
     send("option name Move Overhead type spin default 20 min 0 max 5000");
     send("option name UCI_AnalyseMode type check default false");
     send("option name OwnBook type check default false");
-    send("option name Book File type string default <empty>");
+    send("option name Book File type string default " + (m_defaultBookFile.empty() ? std::string("<empty>") : m_defaultBookFile));
     send("option name SyzygyPath type string default <empty>");
     send("option name Aspiration Windows type check default true");
     send("option name Principal Variation Search type check default true");
@@ -506,8 +509,9 @@ void Application::refresh_integrations() {
     if (m_syzygy)
         integrations = m_syzygy->integrations();
     if (m_book)
-        integrations.probeBook = [book = m_book](const chess::Board& board) {
-            return book->probe(board, board.zobrist_key());
+        integrations.probeBook = [book = m_book, random = std::mt19937_64(std::random_device {}())](
+            const chess::Board& board) mutable {
+            return book->probe(board, random());
         };
     m_search->set_integrations(std::move(integrations));
 }

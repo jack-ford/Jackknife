@@ -38,12 +38,13 @@ inline constexpr std::array<chess::PieceType, 4> PromotionPieces = {
     chess::PieceType::Knight
 };
 
-inline constexpr std::array<const char*, 7> ControlLabels {
+inline constexpr std::array<const char*, 8> ControlLabels {
     "W: New game as White", "B: New game as Black", "L: Local two-player game",
-    "N: New game", "U: Undo turn", "Space: Play current best move", "M: Cycle MultiPV (1-3)"
+    "N: New game", "U: Undo turn", "Space: Play current best move", "M: Cycle MultiPV (1-3)",
+    "O: Toggle opening book"
 };
-inline constexpr std::array<SDL_Keycode, 7> ControlKeys {
-    SDLK_W, SDLK_B, SDLK_L, SDLK_N, SDLK_U, SDLK_SPACE, SDLK_M
+inline constexpr std::array<SDL_Keycode, 8> ControlKeys {
+    SDLK_W, SDLK_B, SDLK_L, SDLK_N, SDLK_U, SDLK_SPACE, SDLK_M, SDLK_O
 };
 
 inline constexpr float TextScale = 1.5f;

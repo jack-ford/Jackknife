@@ -21,7 +21,8 @@ namespace uci {
 
 class Application final {
     public:
-        Application();
+        // A non-empty default book becomes the Book File option's default.
+        explicit Application(std::string defaultBookFile = {});
         ~Application();
 
         Application(const Application&) = delete;
@@ -69,6 +70,7 @@ class Application final {
         static uint64_t perft(chess::Board& board, int depth);
 
         Settings m_settings;
+        std::string m_defaultBookFile;
         chess::Board m_board;
         std::unique_ptr<search::Search> m_search;
         std::shared_ptr<search::OpeningBook> m_book;

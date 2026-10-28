@@ -103,8 +103,18 @@ add_library(chess_uci_lib
 target_include_directories(chess_uci_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/uci")
 target_link_libraries(chess_uci_lib PUBLIC chess_engine)
 
+set(CHESS_BOOK_FILE "${CMAKE_CURRENT_SOURCE_DIR}/data/books/8moves_v3.pgn")
+function(copy_opening_book target)
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/data/books"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CHESS_BOOK_FILE}" "$<TARGET_FILE_DIR:${target}>/data/books/8moves_v3.pgn"
+    )
+endfunction()
+
 add_executable(chess_uci uci/main.cpp)
 target_link_libraries(chess_uci PRIVATE chess_uci_lib)
+copy_opening_book(chess_uci)
 
 if(CHESS_BUILD_BENCHMARKS)
     add_executable(chess_benchmark benchmarking/benchmark.cpp)
@@ -131,6 +141,7 @@ if(CHESS_BUILD_GUI)
             "${CMAKE_CURRENT_SOURCE_DIR}/data/chess_pieces.png"
             "$<TARGET_FILE_DIR:chess_gui>/data/chess_pieces.png"
     )
+    copy_opening_book(chess_gui)
 endif()
 
 include(CTest)
@@ -188,7 +199,8 @@ if(BUILD_TESTING)
 
     add_executable(search_upgrade_tests tests/search_upgrade_tests.cpp)
     target_link_libraries(search_upgrade_tests PRIVATE chess_engine)
-    target_compile_definitions(search_upgrade_tests PRIVATE SYZYGY_TEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/syzygy")
+    target_compile_definitions(search_upgrade_tests PRIVATE SYZYGY_TEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/syzygy"
+        BUNDLED_BOOK_PATH="${CHESS_BOOK_FILE}")
     add_test(NAME search_upgrades COMMAND search_upgrade_tests)
 
     add_executable(search_tests tests/search_tests.cpp)

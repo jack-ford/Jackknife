@@ -5,12 +5,14 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <stop_token>
 #include <string>
 
 #include "constants.hpp"
 #include "core/board.hpp"
 #include "movegen/movegen.hpp"
+#include "search/opening_book.hpp"
 #include "search/search.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -98,6 +100,18 @@ class EnginePlayer final {
             return m_progress;
         }
 
+        // Book moves are chosen at random by weight; null disables the book.
+        void set_book(std::shared_ptr<const search::OpeningBook> book) {
+            cancel();
+            search::Integrations integrations;
+            if (book)
+                integrations.probeBook = [book, random = std::mt19937_64(std::random_device {}())](
+                    const Board& position) mutable {
+                    return book->probe(position, random());
+                };
+            m_search->set_integrations(std::move(integrations));
+        }
+
     private:
         std::unique_ptr<search::Search> m_search = std::make_unique<search::Search>();
         std::future<search::Result> m_future;
@@ -148,7 +162,8 @@ void draw_text(SDL_Renderer* renderer, float x, float y, const char* text) {
 }
 
 void draw_controls(SDL_Renderer* renderer, const Board& board, PieceColor humanColor, bool localGame,
-    const search::Limits& limits, const search::Result& result, bool thinking, const std::string& error) {
+    const search::Limits& limits, const search::Result& result, bool thinking, const std::string& bookStatus,
+    const std::string& error) {
     SDL_SetRenderDrawColor(renderer, 35, 35, 35, 255);
     std::string mode = localGame ? "Local two-player" :
         humanColor == PieceColor::White ? "You: White | Engine: Black" : "You: Black | Engine: White";
@@ -159,7 +174,8 @@ void draw_controls(SDL_Renderer* renderer, const Board& board, PieceColor humanC
         draw_text(renderer, 34, rectangle.y + 14, ControlLabels[index]);
     }
     std::string settings = "-/+: " + std::to_string(limits.time.count()) + " ms | MultiPV " + std::to_string(limits.multiPv);
-    draw_text(renderer, 24, 430, settings.c_str());
+    draw_text(renderer, 24, 474, settings.c_str());
+    draw_text(renderer, 24, 498, bookStatus.c_str());
     auto [gameResult, reason] = board.is_game_over();
     std::string status = thinking ? "Engine thinking..." : "Your move";
     if (localGame)
@@ -174,20 +190,22 @@ void draw_controls(SDL_Renderer* renderer, const Board& board, PieceColor humanC
             default: status = "Draw: insufficient material"; break;
         }
     }
-    draw_text(renderer, 24, 470, status.c_str());
-    std::string statistics = "Depth " + std::to_string(result.depth) + "/" +
+    draw_text(renderer, 24, 534, status.c_str());
+    // Book hits return a one-move variation without searching any nodes.
+    bool bookMove = result.depth == 0 && result.nodes == 0 && !result.variations.empty();
+    std::string statistics = bookMove ? "Book move" : "Depth " + std::to_string(result.depth) + "/" +
         std::to_string(result.selectiveDepth) + " | Nodes " + std::to_string(result.nodes);
-    draw_text(renderer, 24, 510, statistics.c_str());
+    draw_text(renderer, 24, 574, statistics.c_str());
     std::string elapsed = std::to_string(result.elapsed.count()) + " ms | Score: search side";
-    draw_text(renderer, 24, 534, elapsed.c_str());
+    draw_text(renderer, 24, 598, elapsed.c_str());
     for (int index = 0; index < static_cast<int>(result.variations.size()); ++index) {
         const auto& variation = result.variations[index];
         std::string text = std::to_string(index + 1) + ". " + score_text(variation.score);
-        draw_text(renderer, 24, 574.0f + index * 64, text.c_str());
+        draw_text(renderer, 24, 632.0f + index * 56, text.c_str());
         text.clear();
         for (std::size_t ply = 0; ply < std::min<std::size_t>(5, variation.moves.size()); ++ply)
             text += move_text(variation.moves[ply]) + " ";
-        draw_text(renderer, 24, 594.0f + index * 64, text.c_str());
+        draw_text(renderer, 24, 652.0f + index * 56, text.c_str());
     }
     if (!error.empty())
         draw_text(renderer, 24, 800, error.c_str());
@@ -577,10 +595,34 @@ int main(int, char**) {
     EnginePlayer engine;
     search::Result searchResult;
     std::string engineError;
+    std::shared_ptr<const search::OpeningBook> book;
+    bool bookEnabled = false;
+    try {
+        auto loaded = std::make_shared<search::OpeningBook>();
+        loaded->load(std::string(SDL_GetBasePath()) + std::string(search::DefaultBookPath));
+        book = std::move(loaded);
+        bookEnabled = true;
+        engine.set_book(book);
+    }
+    catch (const std::exception& error) {
+        engineError = std::string("Opening book: ") + error.what();
+    }
+    auto book_status = [&] {
+        if (!book)
+            return std::string("Book: unavailable");
+        return std::string(bookEnabled ? "Book: on" : "Book: off") + " (" + std::to_string(book->size()) + " positions)";
+    };
 
     auto handle_control = [&](SDL_Keycode key) {
         if (key == SDLK_SPACE) {
             engine.stop();
+            return;
+        }
+        if (key == SDLK_O) {
+            if (book) {
+                bookEnabled = !bookEnabled;
+                engine.set_book(bookEnabled ? book : nullptr);
+            }
             return;
         }
         if (key == SDLK_M) {
@@ -767,7 +809,8 @@ int main(int, char**) {
         draw_board(renderer, sprites, board, selectedMoves, selected, lastFrom,
             lastTo, dragging, mouse);
         draw_promotion_choices(renderer, sprites, promotion);
-        draw_controls(renderer, board, humanColor, localGame, limits, searchResult, engine.active(), engineError);
+        draw_controls(renderer, board, humanColor, localGame, limits, searchResult, engine.active(),
+            book_status(), engineError);
         SDL_RenderPresent(renderer);
     }
 

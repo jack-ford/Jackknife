@@ -76,6 +76,41 @@ void test_book() {
     require(!book.probe(board), "book miss");
 }
 
+void test_san() {
+    Board board("r3k2r/1P6/8/3pP3/8/1N3N2/8/R3K2R w KQkq d6 0 1");
+    auto san = [&board](std::string_view text) { return parse_san_move(board, text); };
+    require(san("exd6") == parse_coordinate_move(board, "e5d6"), "SAN en passant");
+    require(san("O-O") == parse_coordinate_move(board, "e1g1"), "SAN kingside castling");
+    require(san("0-0-0+") == parse_coordinate_move(board, "e1c1"), "SAN queenside castling");
+    require(san("bxa8=Q+") == parse_coordinate_move(board, "b7a8q"), "SAN capture promotion");
+    require(san("b8N!?") == parse_coordinate_move(board, "b7b8n"), "SAN promotion without =");
+    require(san("Nbd4") == parse_coordinate_move(board, "b3d4"), "SAN file disambiguation");
+    require(!san("Nd4") && !san("b8") && !san("Ke3x") && !san("Qd1"), "invalid SAN accepted");
+}
+
+void test_pgn_book() {
+    std::istringstream input(
+        "[Event \"?\"]\n[Result \"*\"]\n\n1. e4 e5 {comment} 2. Nf3 (2. f4 exf4) Nc6 $1 *\n\n"
+        "[Event \"?\"]\n\n1.e4 c5 2.Nf3 ; rest of line\n1/2-1/2\n"
+        "[FEN \"4k3/8/8/8/8/8/4P3/4K3 w - - 0 1\"]\n\n1. e4 Kd7 1-0\n");
+    search::OpeningBook book;
+    book.load(input, search::OpeningBook::Format::Pgn);
+    Board board;
+    require(book.size() == 7, "PGN book position count");
+    require(book.probe(board, 0) == parse_coordinate_move(board, "e2e4"), "PGN book first move");
+    board.make_move(*parse_coordinate_move(board, "e2e4"));
+    require(book.probe(board, 0) != book.probe(board, 1), "PGN book merged replies");
+    require(book.probe(Board("4k3/8/8/8/8/8/4P3/4K3 w - - 0 1")).has_value(), "PGN FEN tag");
+    std::istringstream invalid("1. e4 e4 *");
+    bool rejected = false;
+    try { book.load(invalid, search::OpeningBook::Format::Pgn); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    require(rejected && book.size() == 7, "illegal PGN move accepted");
+
+    book.load(BUNDLED_BOOK_PATH);
+    require(book.size() > 100000 && book.probe(Board {}).has_value(), "bundled Stockfish book");
+}
+
 void test_search_features() {
     search::Limits limits;
     limits.time = 0ms;
@@ -281,6 +316,8 @@ void test_syzygy() {
 int main() {
     try {
         search_tests::test_book();
+        search_tests::test_san();
+        search_tests::test_pgn_book();
         search_tests::test_search_features();
         search_tests::test_clock();
         search_tests::test_differential_walks();
