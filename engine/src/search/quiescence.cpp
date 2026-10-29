@@ -16,7 +16,7 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
     m_nodes++;
     m_selectiveDepth = std::max(m_selectiveDepth, ply);
 
-    // Sparse positions detect stalemate eagerly; elsewhere only mate is detected, after the evasion loop.
+    // Sparse positions detect stalemate eagerly
     bool inCheck = board.is_in_check();
     MoveList legalMoves;
     bool eagerMoves = std::popcount(board.all_pieces_bitboard()) <= EagerMovePieceLimit;

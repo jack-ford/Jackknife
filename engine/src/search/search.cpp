@@ -47,7 +47,7 @@ void Search::advance_history(const Board& board, int ply, move_t move) {
 }
 
 uint64_t Search::context_key(const NodeContext& node) const {
-    // Entries are shared across paths; only searches that exclude a move need their own.
+    // Entries are shared across paths; only searches that exclude a move need their own
     return node.excludedMove == 0 ? 0 : mix_key(node.excludedMove + ExcludedMoveSeed);
 }
 

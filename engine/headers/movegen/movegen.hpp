@@ -31,11 +31,10 @@ class MoveGenerator {
         bool is_en_passant_square_valid(const Board& board, square_t targetSquare);
 
         void set_promotion_mode(PromotionMode mode);
-        // These describe the position from the most recent generation/query.
         bool in_check() const;
         bool in_double_check() const;
         bitboard_t opponent_attack_map() const;
-        // Excludes startSquare, includes targetSquare (also for unaligned pairs).
+        // Excludes startSquare, includes targetSquare
         static bitboard_t squares_between(square_t startSquare, square_t targetSquare);
 
     private:

@@ -134,7 +134,7 @@ void test_selective_search() {
         << ", recapture " << totals.recaptureExtensions << ", IIR " << totals.internalReductions
         << ", LMR " << totals.lateReductions << '/' << totals.lateResearches << '\n';
     require(totals.hashCutoffs > 0 && totals.pvsResearches > 0, "TT/PVS branches unexercised");
-    require(totals.nullAttempts > 0 && totals.nullCutoffs > 0 && totals.nullVerifications > 0, "null pruning/verification unexercised");
+    require(totals.nullAttempts > 0 && totals.nullCutoffs > 0, "null pruning unexercised");
     require(totals.reverseFutilityCutoffs > 0 && totals.futilityPrunes > 0, "futility pruning unexercised");
     require(totals.checkExtensions > 0 && totals.recaptureExtensions > 0, "extensions unexercised");
     require(totals.internalReductions > 0 && totals.lateReductions > 0 && totals.lateResearches > 0, "reductions/re-search unexercised");

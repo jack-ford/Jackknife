@@ -38,25 +38,25 @@ inline constexpr int VictimValueScale = 16;
 inline constexpr int TacticalScoreDivisor = 16;
 inline constexpr int AspirationDepth = 4;
 inline constexpr int AspirationWindow = 25;
-inline constexpr int ReverseFutilityDepth = 3;
-inline constexpr int ReverseFutilityMargin = 120;
+inline constexpr int ReverseFutilityDepth = 4;
+inline constexpr int ReverseFutilityMargin = 80;
 inline constexpr int FutilityDepth = 5;
 inline constexpr int FutilityMargin = 150;
-inline constexpr int NullMoveDepth = 3;
-inline constexpr int NullVerificationDepth = 6;
+inline constexpr int NullMoveDepth = 2;
+inline constexpr int NullVerificationDepth = MaxPly;
 inline constexpr int NullReductionBase = 2;
-inline constexpr int NullReductionDivisor = 4;
-inline constexpr int InternalReductionDepth = 5;
-inline constexpr int LateReductionDepth = 3;
-inline constexpr int LateReductionMove = 2;
+inline constexpr int NullReductionDivisor = 3;
+inline constexpr int InternalReductionDepth = 4;
+inline constexpr int LateReductionDepth = 2;
+inline constexpr int LateReductionMove = 1;
 inline constexpr double LateReductionBase = 0.75;
 inline constexpr double LateReductionDivisor = 2.0;
-inline constexpr int RecaptureDepth = 3;
+inline constexpr int RecaptureDepth = MaxPly;
 inline constexpr uint64_t ClockCheckMask = 255;
 inline constexpr int AspirationRetries = 4;
 inline constexpr int DeltaMargin = 90;
 inline constexpr int LosingCapturePriority = -100000;
-inline constexpr int MaxLateReduction = 6;
+inline constexpr int MaxLateReduction = 4;
 inline constexpr int FutilityCaptureMargin = 75;
 inline constexpr int ExchangeReductionScale = 300;
 inline constexpr int EvaluationReductionScale = 200;
@@ -71,7 +71,7 @@ inline constexpr int HashExactBonus = 4;
 inline constexpr uint64_t MixMultiplierOne = 0xbf58476d1ce4e5b9ULL;
 inline constexpr uint64_t MixMultiplierTwo = 0x94d049bb133111ebULL;
 inline constexpr uint64_t ExcludedMoveSeed = 0x9e3779b97f4a7c15ULL;
-// Near the fifty-move limit stored scores may ignore an imminent draw.
+// Near the fifty-move limit stored scores may ignore an imminent draw
 inline constexpr int HashCutoffFiftyLimit = 90;
 
 }

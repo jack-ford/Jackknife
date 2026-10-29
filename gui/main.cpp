@@ -100,7 +100,7 @@ class EnginePlayer final {
             return m_progress;
         }
 
-        // Book moves are chosen at random by weight; null disables the book.
+        // Book moves are chosen at random by weight
         void set_book(std::shared_ptr<const search::OpeningBook> book) {
             cancel();
             search::Integrations integrations;
@@ -191,7 +191,7 @@ void draw_controls(SDL_Renderer* renderer, const Board& board, PieceColor humanC
         }
     }
     draw_text(renderer, 24, 534, status.c_str());
-    // Book hits return a one-move variation without searching any nodes.
+    // Book hits return a one-move variation without searching any nodes
     bool bookMove = result.depth == 0 && result.nodes == 0 && !result.variations.empty();
     std::string statistics = bookMove ? "Book move" : "Depth " + std::to_string(result.depth) + "/" +
         std::to_string(result.selectiveDepth) + " | Nodes " + std::to_string(result.nodes);

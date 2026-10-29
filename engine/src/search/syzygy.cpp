@@ -50,7 +50,7 @@ Syzygy::Syzygy(const std::string& path) {
     if (path.empty())
         throw std::invalid_argument("Syzygy path is empty");
     // The registry retains the mapping between clients. This prevents a final
-    // release racing a new initialization of Fathom's process-wide globals.
+    // release racing a new initialization of Fathom's process-wide globals
     static std::shared_ptr<State> activeState;
     std::lock_guard lock(tablebaseMutex);
     if (activeState && activeState->path != path) {

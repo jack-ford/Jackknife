@@ -15,8 +15,9 @@ bool is_quiet(const Board& board, move_t move) {
 
 bool has_null_material(const Board& board) {
     PieceColor color = board.move_color();
+    // Zugzwang is only likely in pawn endings
     return board.knights(color).size() + board.bishops(color).size() +
-        board.rooks(color).size() + board.queens(color).size() >= 2;
+        board.rooks(color).size() + board.queens(color).size() > 0;
 }
 
 bool is_advanced_pawn(const Board& board, move_t move) {

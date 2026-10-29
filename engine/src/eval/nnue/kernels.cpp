@@ -29,7 +29,7 @@ void update_rows(int16_t* accumulator, const int16_t* added, const int16_t* remo
         if constexpr (Add) value += added[i];
         if constexpr (Remove) value -= removed[i];
         if constexpr (Capture) value -= captured[i];
-        // Match SIMD's wrapping arithmetic even for intermediate refresh sums.
+        // Match SIMD's wrapping arithmetic even for intermediate refresh sums
         accumulator[i] = std::bit_cast<int16_t>(static_cast<uint16_t>(value));
     }
 }
@@ -59,7 +59,7 @@ void activate(const int16_t* input, int16_t* output) {
         const __m256i atMaximum = _mm256_cmpeq_epi16(value, maximum);
         value = _mm256_mullo_epi16(value, value);
         value = _mm256_srli_epi16(_mm256_add_epi16(value, rounding), 8);
-        // 256 squared wraps to zero in 16 bits; restore this endpoint.
+        // 256 squared wraps to zero in 16 bits
         value = _mm256_blendv_epi8(value, maximum, atMaximum);
         _mm256_storeu_si256(reinterpret_cast<__m256i*>(output + i), value);
     }
@@ -72,7 +72,7 @@ void hidden_layer(const int16_t* input, const int16_t* weights, int32_t* output)
     constexpr int InputSize = 2 * AccumulatorSize;
     int row = 0;
 #if defined(__AVX2__)
-    // Four rows share each input load and one horizontal reduction.
+    // Four rows share each input load and one horizontal reduction
     constexpr int RowsPerPass = 4;
     static_assert(HiddenSize % RowsPerPass == 0 && InputSize % 16 == 0);
     for (; row < HiddenSize; row += RowsPerPass) {
