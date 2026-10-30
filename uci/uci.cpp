@@ -21,21 +21,25 @@
 namespace uci {
 namespace {
 
-constexpr std::string_view EngineName = "Jackknife 0.2.0";
+constexpr std::string_view EngineName = "Jackknife 2.1.0";
 constexpr std::string_view EngineAuthor = "Jack Ford";
 
 std::string lower(std::string_view value) {
     std::string result(value);
+
     std::transform(result.begin(), result.end(), result.begin(), [](unsigned char character) {
         return static_cast<char>(std::tolower(character));
     });
+
     return result;
 }
 
 std::string_view trim(std::string_view value) {
     std::size_t first = value.find_first_not_of(" \t\r\n");
+
     if (first == std::string_view::npos)
         return {};
+
     std::size_t last = value.find_last_not_of(" \t\r\n");
     return value.substr(first, last - first + 1);
 }
@@ -44,7 +48,9 @@ template <typename Integer>
 bool parse_integer(std::string_view text, Integer& value) {
     if (text.empty())
         return false;
+
     auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+
     return error == std::errc {} && end == text.data() + text.size();
 }
 
@@ -54,19 +60,23 @@ bool parse_check(std::string_view text, bool& value) {
         value = true;
         return true;
     }
+    
     if (normalized == "false" || normalized == "0" || normalized == "off") {
         value = false;
         return true;
     }
+
     return false;
 }
 
 std::vector<std::string> words(std::string_view text) {
     std::istringstream input {std::string(text)};
     std::vector<std::string> result;
+
     std::string word;
     while (input >> word)
         result.push_back(std::move(word));
+
     return result;
 }
 
@@ -75,6 +85,7 @@ bool is_go_keyword(std::string_view word) {
         "searchmoves", "ponder", "wtime", "btime", "winc", "binc", "movestogo",
         "depth", "nodes", "mate", "movetime", "infinite"
     };
+
     return keywords.contains(lower(word));
 }
 
@@ -82,10 +93,13 @@ std::string score_text(int score) {
     if (std::abs(score) >= search::MateThreshold) {
         int plies = search::MateScore - std::abs(score);
         int moves = (plies + 1) / 2;
+
         if (score < 0)
             moves = -moves;
+
         return "mate " + std::to_string(moves);
     }
+
     return "cp " + std::to_string(score);
 }
 
@@ -108,6 +122,7 @@ Application::~Application() {
 
 int Application::run(std::istream& input, std::ostream& output) {
     m_output = &output;
+
     std::string line;
     while (std::getline(input, line)) {
         try {
@@ -116,21 +131,26 @@ int Application::run(std::istream& input, std::ostream& output) {
         catch (const std::exception& error) {
             send_error(error.what());
         }
+
         if (lower(trim(line)) == "quit")
             break;
     }
+
     stop_search(false);
+
     return 0;
 }
 
 void Application::handle_command(std::string_view line) {
     line = trim(line);
+
     std::size_t separator = line.find_first_of(" \t");
     std::string command = lower(line.substr(0, separator));
     std::string_view arguments = separator == std::string_view::npos ? std::string_view {} : trim(line.substr(separator + 1));
 
     if (command.empty())
         return;
+
     if (command == "uci")
         print_identification();
     else if (command == "isready")
@@ -210,6 +230,7 @@ void Application::print_identification() {
 void Application::handle_position(std::string_view arguments) {
     stop_search(false);
     std::vector<std::string> tokens = words(arguments);
+
     if (tokens.empty())
         throw std::invalid_argument("position requires startpos or fen");
 
@@ -217,14 +238,17 @@ void Application::handle_position(std::string_view arguments) {
     std::size_t index = 0;
     if (lower(tokens[index]) == "startpos") {
         board.load_start_position();
-        ++index;
+        index++;
     }
     else if (lower(tokens[index]) == "fen") {
         if (tokens.size() < 7)
             throw std::invalid_argument("position fen requires six FEN fields");
+
         std::string fen = tokens[1];
-        for (std::size_t field = 2; field <= 6; ++field)
+
+        for (std::size_t field = 2; field <= 6; field++)
             fen += " " + tokens[field];
+
         board.load_position(fen);
         index = 7;
     }
@@ -235,10 +259,12 @@ void Application::handle_position(std::string_view arguments) {
     if (index < tokens.size()) {
         if (lower(tokens[index]) != "moves")
             throw std::invalid_argument("unexpected position argument");
-        for (++index; index < tokens.size(); ++index) {
+
+        for (++index; index < tokens.size(); index++) {
             auto move = chess::parse_coordinate_move(board, lower(tokens[index]));
             if (!move)
                 throw std::invalid_argument("illegal position move: " + tokens[index]);
+
             board.make_move(*move);
         }
     }
@@ -248,27 +274,32 @@ void Application::handle_position(std::string_view arguments) {
 void Application::handle_setoption(std::string_view arguments) {
     stop_search(false);
     std::vector<std::string> tokens = words(arguments);
+
     if (tokens.empty() || lower(tokens[0]) != "name")
         throw std::invalid_argument("setoption requires name");
 
     std::size_t valueIndex = tokens.size();
-    for (std::size_t index = 1; index < tokens.size(); ++index)
+    for (std::size_t index = 1; index < tokens.size(); index++)
         if (lower(tokens[index]) == "value") {
             valueIndex = index;
             break;
         }
+
     std::string name;
-    for (std::size_t index = 1; index < valueIndex; ++index)
+    for (std::size_t index = 1; index < valueIndex; index++)
         name += (name.empty() ? "" : " ") + lower(tokens[index]);
+
     std::string value;
-    for (std::size_t index = valueIndex + (valueIndex < tokens.size()); index < tokens.size(); ++index)
+    for (std::size_t index = valueIndex + (valueIndex < tokens.size()); index < tokens.size(); index++)
         value += (value.empty() ? "" : " ") + tokens[index];
 
     bool rebuild = false;
+
     auto setCheck = [&](bool& setting) {
         bool parsed;
         if (!parse_check(value, parsed))
             throw std::invalid_argument("invalid check value for " + name);
+
         if (setting != parsed) {
             setting = parsed;
             rebuild = true;
@@ -281,6 +312,7 @@ void Application::handle_setoption(std::string_view arguments) {
         int parsed = 0;
         if (!parse_integer(value, parsed) || parsed < 1 || parsed > static_cast<int>(search::MaxHashMegabytes))
             throw std::invalid_argument("Hash must be between 1 and 1024");
+
         if (m_settings.hashMegabytes != static_cast<std::size_t>(parsed)) {
             m_settings.hashMegabytes = parsed;
             rebuild = true;
@@ -295,12 +327,14 @@ void Application::handle_setoption(std::string_view arguments) {
         int parsed = 0;
         if (!parse_integer(value, parsed) || parsed < 1 || parsed > chess::MaxMoves)
             throw std::invalid_argument("MultiPV must be between 1 and 256");
+
         m_settings.multiPv = parsed;
     }
     else if (name == "move overhead") {
         int parsed = 0;
         if (!parse_integer(value, parsed) || parsed < 0 || parsed > 5000)
             throw std::invalid_argument("Move Overhead must be between 0 and 5000");
+
         m_settings.moveOverhead = std::chrono::milliseconds {parsed};
     }
     else if (name == "ponder")
@@ -311,6 +345,7 @@ void Application::handle_setoption(std::string_view arguments) {
         bool parsed;
         if (!parse_check(value, parsed))
             throw std::invalid_argument("invalid check value for OwnBook");
+
         m_settings.ownBook = parsed;
         configure_book();
     }
@@ -347,6 +382,7 @@ void Application::handle_setoption(std::string_view arguments) {
 void Application::handle_go(std::string_view arguments) {
     stop_search(false);
     std::vector<std::string> tokens = words(arguments);
+    
     GoCommand command;
     command.limits.depth = search::MaxPly - 1;
     command.limits.multiPv = m_settings.multiPv;
@@ -358,6 +394,7 @@ void Application::handle_go(std::string_view arguments) {
     std::chrono::milliseconds whiteIncrement {0};
     std::chrono::milliseconds blackIncrement {0};
     std::chrono::milliseconds moveTime {0};
+    
     int movesToGo = 0;
     int mate = 0;
     bool hasClock = false;
@@ -369,7 +406,7 @@ void Application::handle_go(std::string_view arguments) {
             throw std::invalid_argument("invalid go value");
     };
 
-    for (std::size_t index = 0; index < tokens.size(); ++index) {
+    for (std::size_t index = 0; index < tokens.size(); index++) {
         std::string keyword = lower(tokens[index]);
         if (keyword == "ponder")
             command.ponder = true;
@@ -391,9 +428,10 @@ void Application::handle_go(std::string_view arguments) {
         }
         else if (keyword == "searchmoves") {
             while (index + 1 < tokens.size() && !is_go_keyword(tokens[index + 1])) {
-                auto move = chess::parse_coordinate_move(m_board, lower(tokens[++index]));
+                auto move = chess::parse_coordinate_move(m_board, lower(tokens[index++]));
                 if (!move)
                     throw std::invalid_argument("illegal searchmove: " + tokens[index]);
+
                 if (std::find(command.limits.searchMoves.begin(), command.limits.searchMoves.end(), *move) == command.limits.searchMoves.end())
                     command.limits.searchMoves.push_back(*move);
             }
@@ -407,6 +445,7 @@ void Application::handle_go(std::string_view arguments) {
     if (whiteTime.count() < 0 || blackTime.count() < 0 || whiteIncrement.count() < 0 ||
         blackIncrement.count() < 0 || moveTime.count() < 0 || movesToGo < 0)
         throw std::invalid_argument("go times must not be negative");
+
     if (command.limits.depth < 1 || command.limits.depth >= search::MaxPly || mate < 0)
         throw std::invalid_argument("go depth or mate limit is out of range");
 
@@ -414,6 +453,7 @@ void Application::handle_go(std::string_view arguments) {
         int mateDepth = mate >= search::MaxPly / 2 ? search::MaxPly - 1 : mate * 2;
         command.limits.depth = std::min(command.limits.depth, mateDepth);
     }
+
     if (hasMoveTime) {
         command.limits.time = std::max(std::chrono::milliseconds {1}, moveTime);
         command.limits.softTime = command.limits.time;
@@ -428,6 +468,7 @@ void Application::handle_go(std::string_view arguments) {
         command.limits.time = budget.hard;
         command.limits.softTime = budget.soft;
     }
+
     if (infinite) {
         command.limits.time = std::chrono::milliseconds {0};
         command.limits.softTime = std::chrono::milliseconds {0};
@@ -438,6 +479,7 @@ void Application::handle_go(std::string_view arguments) {
         command.limits.time = std::chrono::milliseconds {0};
         command.limits.softTime = std::chrono::milliseconds {0};
     }
+
     m_ponderHitLimits = command.ponderHitLimits;
     start_search(command.limits, command.ponder);
 }
@@ -446,16 +488,19 @@ void Application::start_search(const search::Limits& limits, bool ponder) {
     m_stopSource = std::stop_source {};
     m_emitBestMove = !ponder;
     m_pondering = ponder;
+
     chess::Board position = m_board;
     m_worker = std::jthread([this, position = std::move(position), limits]() mutable {
         try {
             search::Result result = m_search->iterative_deepening(std::move(position), limits,
                 m_stopSource.get_token(), [this](const search::Result& iteration) { print_info(iteration); });
+
             if (m_emitBestMove.load())
                 print_result(result);
         }
         catch (const std::exception& error) {
             send_error(error.what());
+
             if (m_emitBestMove.load())
                 send("bestmove 0000");
         }
@@ -467,6 +512,7 @@ void Application::stop_search(bool emitBestMove) {
         m_pondering = false;
         return;
     }
+
     m_emitBestMove = emitBestMove;
     m_stopSource.request_stop();
     m_worker.join();
@@ -476,16 +522,21 @@ void Application::stop_search(bool emitBestMove) {
 void Application::print_info(const search::Result& result) {
     uint64_t elapsed = std::max<int64_t>(0, result.elapsed.count());
     uint64_t nps = elapsed == 0 ? result.nodes * 1000 : result.nodes * 1000 / elapsed;
-    for (std::size_t index = 0; index < result.variations.size(); ++index) {
+
+    for (std::size_t index = 0; index < result.variations.size(); index++) {
         const auto& variation = result.variations[index];
         std::ostringstream line;
+
         line << "info depth " << result.depth << " seldepth " << result.selectiveDepth;
+
         if (result.variations.size() > 1)
             line << " multipv " << index + 1;
         line << " score " << score_text(variation.score) << " nodes " << result.nodes
             << " nps " << nps << " time " << elapsed << " pv";
+
         for (chess::move_t move : variation.moves)
             line << ' ' << chess::coordinate_move(move);
+
         send(line.str());
     }
 }
@@ -493,8 +544,10 @@ void Application::print_info(const search::Result& result) {
 void Application::print_result(const search::Result& result) {
     std::string line = "bestmove ";
     line += result.bestMove == 0 ? "0000" : chess::coordinate_move(result.bestMove);
+
     if (result.ponderMove != 0)
         line += " ponder " + chess::coordinate_move(result.ponderMove);
+
     send(line);
 }
 
@@ -508,11 +561,13 @@ void Application::refresh_integrations() {
     search::Integrations integrations;
     if (m_syzygy)
         integrations = m_syzygy->integrations();
+
     if (m_book)
         integrations.probeBook = [book = m_book, random = std::mt19937_64(std::random_device {}())](
             const chess::Board& board) mutable {
             return book->probe(board, random());
         };
+
     m_search->set_integrations(std::move(integrations));
 }
 
@@ -522,42 +577,51 @@ void Application::configure_book() {
         refresh_integrations();
         return;
     }
+
     auto book = std::make_shared<search::OpeningBook>();
     book->load(m_settings.bookFile);
     m_book = std::move(book);
     refresh_integrations();
+
     send("info string opening book loaded: " + std::to_string(m_book->size()) + " positions");
 }
 
 void Application::configure_syzygy() {
     m_search->set_integrations({});
     m_syzygy.reset();
+
     if (!m_settings.syzygyPath.empty()) {
         m_syzygy = std::make_shared<search::Syzygy>(m_settings.syzygyPath);
         send("info string Syzygy loaded: up to " + std::to_string(m_syzygy->max_pieces()) + " pieces");
     }
+
     refresh_integrations();
 }
 
 uint64_t Application::perft(chess::Board& board, int depth) {
     if (depth == 0)
         return 1;
+
     chess::MoveGenerator generator;
     chess::MoveList moves = generator.generate_moves(board);
+
     uint64_t nodes = 0;
     for (chess::move_t move : moves) {
         board.make_move(move, true);
         nodes += perft(board, depth - 1);
         board.unmake_move(move, true);
     }
+
     return nodes;
 }
 
 void Application::handle_perft(std::string_view arguments) {
     stop_search(false);
     int depth = 0;
+
     if (!parse_integer(trim(arguments), depth) || depth < 0 || depth > 16)
         throw std::invalid_argument("perft depth must be between 0 and 16");
+
     chess::Board board = m_board;
     auto start = std::chrono::steady_clock::now();
     if (depth == 0) {
@@ -565,6 +629,7 @@ void Application::handle_perft(std::string_view arguments) {
         send("Time: 0 ms");
         return;
     }
+
     uint64_t total = 0;
     chess::MoveGenerator generator;
     for (chess::move_t move : generator.generate_moves(board)) {
@@ -572,8 +637,10 @@ void Application::handle_perft(std::string_view arguments) {
         uint64_t nodes = perft(board, depth - 1);
         board.unmake_move(move, true);
         total += nodes;
+
         send(chess::coordinate_move(move) + ": " + std::to_string(nodes));
     }
+
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
     send("Nodes searched: " + std::to_string(total));
     send("Time: " + std::to_string(elapsed.count()) + " ms");
@@ -582,15 +649,19 @@ void Application::handle_perft(std::string_view arguments) {
 void Application::handle_bench(std::string_view arguments) {
     stop_search(false);
     int depth = 6;
+
     if (!trim(arguments).empty() && (!parse_integer(trim(arguments), depth) || depth < 1 || depth >= search::MaxPly))
         throw std::invalid_argument("bench depth is out of range");
+
     search::Limits limits;
     limits.depth = depth;
     limits.time = std::chrono::milliseconds {0};
     limits.multiPv = 1;
+
     auto start = std::chrono::steady_clock::now();
     search::Result result = m_search->iterative_deepening(m_board, limits);
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+
     send("info string bench depth " + std::to_string(result.depth) + " nodes " + std::to_string(result.nodes) +
         " time " + std::to_string(elapsed.count()) + " bestmove " +
         (result.bestMove == 0 ? std::string("0000") : chess::coordinate_move(result.bestMove)));

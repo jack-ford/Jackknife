@@ -21,7 +21,6 @@ namespace uci {
 
 class Application final {
     public:
-        // A non-empty default book becomes the Book File option's default.
         explicit Application(std::string defaultBookFile = {});
         ~Application();
 
