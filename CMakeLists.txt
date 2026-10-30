@@ -40,6 +40,7 @@ add_library(chess_engine
     engine/src/core/board.cpp
     engine/src/utils/fen_utility.cpp
     engine/src/utils/result_utility.cpp
+    engine/src/utils/move_utility.cpp
     engine/src/eval/nnue/nnue.cpp
     engine/src/eval/nnue/kernels.cpp
     engine/src/eval/nnue/network.cpp

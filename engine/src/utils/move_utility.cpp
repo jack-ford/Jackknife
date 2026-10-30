@@ -1,4 +1,4 @@
-#include "move_utility.hpp"
+#include "utils/move_utility.hpp"
 
 namespace chess {
 
