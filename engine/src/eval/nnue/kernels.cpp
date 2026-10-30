@@ -12,23 +12,29 @@ namespace {
 template<bool Add, bool Remove, bool Capture>
 void update_rows(int16_t* accumulator, const int16_t* added, const int16_t* removed, const int16_t* captured) {
     int i = 0;
-#if defined(__AVX2__)
-    for (; i < AccumulatorSize; i += 16) {
-        __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(accumulator + i));
-        if constexpr (Add)
-            value = _mm256_add_epi16(value, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(added + i)));
-        if constexpr (Remove)
-            value = _mm256_sub_epi16(value, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(removed + i)));
-        if constexpr (Capture)
-            value = _mm256_sub_epi16(value, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(captured + i)));
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(accumulator + i), value);
-    }
-#endif
-    for (; i < AccumulatorSize; ++i) {
+    #if defined(__AVX2__)
+        for (; i < AccumulatorSize; i += 16) {
+            __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(accumulator + i));
+            if constexpr (Add)
+                value = _mm256_add_epi16(value, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(added + i)));
+
+            if constexpr (Remove)
+                value = _mm256_sub_epi16(value, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(removed + i)));
+
+            if constexpr (Capture)
+                value = _mm256_sub_epi16(value, _mm256_loadu_si256(reinterpret_cast<const __m256i*>(captured + i)));
+
+            _mm256_storeu_si256(reinterpret_cast<__m256i*>(accumulator + i), value);
+        }
+    #endif
+
+    for (; i < AccumulatorSize; i++) {
         int value = accumulator[i];
+
         if constexpr (Add) value += added[i];
         if constexpr (Remove) value -= removed[i];
         if constexpr (Capture) value -= captured[i];
+
         // Match SIMD's wrapping arithmetic even for intermediate refresh sums
         accumulator[i] = std::bit_cast<int16_t>(static_cast<uint16_t>(value));
     }
@@ -49,72 +55,87 @@ void update(int16_t* accumulator, const int16_t* added, const int16_t* removed, 
 
 void activate(const int16_t* input, int16_t* output) {
     int i = 0;
-#if defined(__AVX2__)
-    const __m256i zero = _mm256_setzero_si256();
-    const __m256i maximum = _mm256_set1_epi16(ActivationScale);
-    const __m256i rounding = _mm256_set1_epi16(ActivationScale / 2);
-    for (; i < AccumulatorSize; i += 16) {
-        __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
-        value = _mm256_min_epi16(_mm256_max_epi16(value, zero), maximum);
-        const __m256i atMaximum = _mm256_cmpeq_epi16(value, maximum);
-        value = _mm256_mullo_epi16(value, value);
-        value = _mm256_srli_epi16(_mm256_add_epi16(value, rounding), 8);
-        // 256 squared wraps to zero in 16 bits
-        value = _mm256_blendv_epi8(value, maximum, atMaximum);
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(output + i), value);
-    }
-#endif
-    for (; i < AccumulatorSize; ++i)
+    #if defined(__AVX2__)
+        const __m256i zero = _mm256_setzero_si256();
+        const __m256i maximum = _mm256_set1_epi16(ActivationScale);
+        const __m256i rounding = _mm256_set1_epi16(ActivationScale / 2);
+
+        for (; i < AccumulatorSize; i += 16) {
+            __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
+            value = _mm256_min_epi16(_mm256_max_epi16(value, zero), maximum);
+
+            const __m256i atMaximum = _mm256_cmpeq_epi16(value, maximum);
+            value = _mm256_mullo_epi16(value, value);
+            value = _mm256_srli_epi16(_mm256_add_epi16(value, rounding), 8);
+
+            // 256 squared wraps to zero in 16 bits
+            value = _mm256_blendv_epi8(value, maximum, atMaximum);
+            _mm256_storeu_si256(reinterpret_cast<__m256i*>(output + i), value);
+        }
+    #endif
+
+    for (; i < AccumulatorSize; i++)
         output[i] = screlu(input[i]);
 }
 
 void hidden_layer(const int16_t* input, const int16_t* weights, int32_t* output) {
     constexpr int InputSize = 2 * AccumulatorSize;
     int row = 0;
-#if defined(__AVX2__)
-    // Four rows share each input load and one horizontal reduction
-    constexpr int RowsPerPass = 4;
-    static_assert(HiddenSize % RowsPerPass == 0 && InputSize % 16 == 0);
-    for (; row < HiddenSize; row += RowsPerPass) {
-        const int16_t* rows = weights + row * InputSize;
-        __m256i sum0 = _mm256_setzero_si256();
-        __m256i sum1 = sum0, sum2 = sum0, sum3 = sum0;
-        for (int i = 0; i < InputSize; i += 16) {
-            __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
-            const auto weight = [&](int offset) {
-                return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rows + offset * InputSize + i));
-            };
-            sum0 = _mm256_add_epi32(sum0, _mm256_madd_epi16(value, weight(0)));
-            sum1 = _mm256_add_epi32(sum1, _mm256_madd_epi16(value, weight(1)));
-            sum2 = _mm256_add_epi32(sum2, _mm256_madd_epi16(value, weight(2)));
-            sum3 = _mm256_add_epi32(sum3, _mm256_madd_epi16(value, weight(3)));
+    #if defined(__AVX2__)
+        // Four rows share each input load and one horizontal reduction
+        constexpr int RowsPerPass = 4;
+        static_assert(HiddenSize % RowsPerPass == 0 && InputSize % 16 == 0);
+
+        for (; row < HiddenSize; row += RowsPerPass) {
+            const int16_t* rows = weights + row * InputSize;
+            __m256i sum0 = _mm256_setzero_si256();
+            __m256i sum1 = sum0, sum2 = sum0, sum3 = sum0;
+
+            for (int i = 0; i < InputSize; i += 16) {
+                __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
+
+                const auto weight = [&](int offset) {
+                    return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rows + offset * InputSize + i));
+                };
+
+                sum0 = _mm256_add_epi32(sum0, _mm256_madd_epi16(value, weight(0)));
+                sum1 = _mm256_add_epi32(sum1, _mm256_madd_epi16(value, weight(1)));
+                sum2 = _mm256_add_epi32(sum2, _mm256_madd_epi16(value, weight(2)));
+                sum3 = _mm256_add_epi32(sum3, _mm256_madd_epi16(value, weight(3)));
+            }
+
+            __m256i sums = _mm256_hadd_epi32(_mm256_hadd_epi32(sum0, sum1), _mm256_hadd_epi32(sum2, sum3));
+            __m128i result = _mm_add_epi32(_mm256_castsi256_si128(sums), _mm256_extracti128_si256(sums, 1));
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(output + row), result);
         }
-        __m256i sums = _mm256_hadd_epi32(_mm256_hadd_epi32(sum0, sum1), _mm256_hadd_epi32(sum2, sum3));
-        __m128i result = _mm_add_epi32(_mm256_castsi256_si128(sums), _mm256_extracti128_si256(sums, 1));
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(output + row), result);
-    }
-#endif
-    for (; row < HiddenSize; ++row)
+    #endif
+
+    for (; row < HiddenSize; row++)
         output[row] = dot_product(input, weights + row * InputSize, InputSize);
 }
 
 int32_t dot_product(const int16_t* values, const int16_t* weights, int size) {
     int32_t sum = 0;
     int i = 0;
-#if defined(__AVX2__)
-    __m256i dot = _mm256_setzero_si256();
-    for (; i + 16 <= size; i += 16) {
-        __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(values + i));
-        __m256i weight = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(weights + i));
-        dot = _mm256_add_epi32(dot, _mm256_madd_epi16(value, weight));
-    }
-    __m128i halves = _mm_add_epi32(_mm256_castsi256_si128(dot), _mm256_extracti128_si256(dot, 1));
-    halves = _mm_add_epi32(halves, _mm_srli_si128(halves, 8));
-    halves = _mm_add_epi32(halves, _mm_srli_si128(halves, 4));
-    sum = _mm_cvtsi128_si32(halves);
-#endif
-    for (; i < size; ++i)
+    #if defined(__AVX2__)
+        __m256i dot = _mm256_setzero_si256();
+
+        for (; i + 16 <= size; i += 16) {
+            __m256i value = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(values + i));
+            __m256i weight = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(weights + i));
+            dot = _mm256_add_epi32(dot, _mm256_madd_epi16(value, weight));
+        }
+
+        __m128i halves = _mm_add_epi32(_mm256_castsi256_si128(dot), _mm256_extracti128_si256(dot, 1));
+        halves = _mm_add_epi32(halves, _mm_srli_si128(halves, 8));
+        halves = _mm_add_epi32(halves, _mm_srli_si128(halves, 4));
+        
+        sum = _mm_cvtsi128_si32(halves);
+    #endif
+
+    for (; i < size; i++)
         sum += values[i] * weights[i];
+
     return sum;
 }
 

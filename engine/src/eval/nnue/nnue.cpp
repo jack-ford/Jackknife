@@ -44,7 +44,7 @@ int evaluate_activated(const Accumulator& accumulator, PieceColor sideToMove, co
     alignas(32) int16_t hidden[HiddenSize];
 
     kernels::hidden_layer(activated, &weights.hiddenWeights[0][0], sums);
-    for (int i = 0; i < HiddenSize; ++i)
+    for (int i = 0; i < HiddenSize; i++)
         hidden[i] = kernels::screlu(std::max(0, sums[i] + weights.hiddenBiases[i]) / WeightScale);
 
     int us = static_cast<int>(sideToMove);

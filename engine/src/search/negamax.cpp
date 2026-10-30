@@ -19,18 +19,17 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
     bool inCheck = board.is_in_check();
 
     if (m_options.checkExtensions && inCheck && node.extensions < MaxExtensions && depth >= 0) {
-        ++depth;
-        ++node.extensions;
-        ++m_statistics.checkExtensions;
+        depth++;
+        node.extensions++;
+        m_statistics.checkExtensions++;
     }
 
     if (depth <= 0)
         return quiescence_search(board, alpha, beta, ply, node.nullSearch);
 
-    ++m_nodes;
+    m_nodes++;
     m_selectiveDepth = std::max(m_selectiveDepth, ply);
 
-    // Sparse positions generate eagerly; otherwise mate and stalemate are detected after the move loop.
     MoveList legalMoves;
     bool eagerMoves = std::popcount(board.all_pieces_bitboard()) <= EagerMovePieceLimit;
     if (eagerMoves) {
@@ -54,7 +53,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
     if (!node.nullSearch && !pvNode && m_integrations.probeTablebase) {
         auto outcome = m_integrations.probeTablebase(board);
         if (outcome) {
-            ++m_statistics.tablebaseHits;
+            m_statistics.tablebaseHits++;
 
             if (*outcome == TablebaseOutcome::Draw)
                 return 0;
@@ -78,14 +77,14 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
     }
 
     if (!pvNode && board.fifty_move_counter() < HashCutoffFiftyLimit && probe.can_cutoff(depth, alpha, beta)) {
-        ++m_statistics.hashCutoffs;
+        m_statistics.hashCutoffs++;
         return probe.score;
     }
 
     move_t hashMove = probe.move;
     if (m_options.internalIterativeReduction && !pvNode && !inCheck && depth >= InternalReductionDepth && hashMove == 0) {
-        --depth;
-        ++m_statistics.internalReductions;
+        depth--;
+        m_statistics.internalReductions++;
     }
 
     int rawStaticScore = probe.hit ? probe.staticScore : eval::evaluate(board);
@@ -99,7 +98,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
         board.fifty_move_counter() + depth + MaxExtensions < 100;
 
     if (m_options.reverseFutilityPruning && canPrune && depth <= ReverseFutilityDepth && staticScore - ReverseFutilityMargin * depth >= beta) {
-        ++m_statistics.reverseFutilityCutoffs;
+        m_statistics.reverseFutilityCutoffs++;
 
         store_hash(board, context, 0, staticScore, rawStaticScore, depth, ply, originalAlpha, beta);
 
@@ -113,7 +112,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
         if (m_stopped)
             return 0;
         if (score <= alpha) {
-            ++m_statistics.razorCutoffs;
+            m_statistics.razorCutoffs++;
             return score;
         }
     }
@@ -125,7 +124,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
     }
 
     if (m_options.nullMovePruning && canPrune && node.allowNull && !node.nullSearch && depth >= NullMoveDepth && staticScore >= beta && has_null_material(board)) {
-        ++m_statistics.nullAttempts;
+        m_statistics.nullAttempts++;
 
         int reduction = NullReductionBase + depth / NullReductionDivisor;
         board.make_null_move();
@@ -143,7 +142,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
 
         if (score >= beta && score < MateThreshold) {
             if (depth >= NullVerificationDepth) {
-                ++m_statistics.nullVerifications;
+                m_statistics.nullVerifications++;
 
                 NodeContext verification = node;
                 verification.pvNode = false;
@@ -158,7 +157,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
                 score = std::min(score, verifiedScore);
             }
             if (score >= beta) {
-                ++m_statistics.nullCutoffs;
+                m_statistics.nullCutoffs++;
                 store_hash(board, context, 0, score, rawStaticScore, depth, ply, originalAlpha, beta);
 
                 return score;
@@ -179,7 +178,8 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
 
     while (auto candidate = picker.next()) {
         move_t move = candidate->move;
-        ++legalMoveCount;
+        legalMoveCount++;
+
         if (move == node.excludedMove)
             continue;
 
@@ -198,34 +198,39 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
 
         m_statistics.recaptureExtensions += extension;
 
-        // The hash move is singular when every alternative fails low against a reduced, lowered bound.
+        
         if (m_options.singularExtensions && move == hashMove && node.excludedMove == 0 && depth >= SingularDepth &&
             node.extensions + extension < MaxExtensions && probe.contextMatch && probe.depth >= depth - SingularDepthMargin &&
             (probe.bound == Bound::Lower || probe.bound == Bound::Exact) && std::abs(probe.score) < MateThreshold) {
             int singularBeta = probe.score - SingularMargin * depth;
+
             NodeContext verification = node;
             verification.pvNode = false;
             verification.allowNull = false;
             verification.excludedMove = move;
+
             int score = nega_max(board, (depth - 1) / 2, singularBeta - 1, singularBeta, verification);
+
             m_pvLength[ply] = ply;
             if (m_stopped)
                 return 0;
+
             if (score < singularBeta) {
-                ++extension;
-                ++m_statistics.singularExtensions;
+                extension++;
+                m_statistics.singularExtensions++;
             } else if (!pvNode && singularBeta >= beta) {
-                // Multi-cut: several moves beat beta, so this node fails high without a full search.
+                // Several moves beat beta, so this node fails high without a full search.
                 return singularBeta;
             }
         }
 
         bool givesCheck = board.gives_check(move);
+
         if (m_options.futilityPruning && canPrune && depth <= FutilityDepth && searched > 0 &&
             Move::type(move) != Move::Type::Promotion &&
             !givesCheck && !killer && !advancedPawn && Move::type(move) != Move::Type::Castling &&
             margin < Infinity && staticScore + margin <= alpha && std::abs(alpha) < MateThreshold) {
-            ++m_statistics.futilityPrunes;
+            m_statistics.futilityPrunes++;
 
             bestScore = std::max(bestScore, staticScore + margin);
             continue;
@@ -280,6 +285,7 @@ int Search::nega_max(Board& board, int depth, int alpha, int beta, NodeContext n
 
     if (legalMoveCount == 0)
         return inCheck ? -MateScore + ply : 0;
+    
     if (bestScore == -Infinity)
         return alpha;
 

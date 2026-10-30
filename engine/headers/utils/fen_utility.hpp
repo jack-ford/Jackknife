@@ -33,7 +33,6 @@ namespace FenUtility {
 
     PositionInfo position_from_fen(std::string_view fen);
 
-    // Preserve the raw target by default; false emits only legally capturable EP targets.
     std::string current_fen(const Board& board, bool alwaysIncludeEpSquare = true);
     bool en_passant_can_be_captured(const Board& board);
     std::string flip_fen(std::string_view fen);

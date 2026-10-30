@@ -7,9 +7,6 @@
 
 namespace search {
 
-// Fathom owns process-wide mappings. Instances may share the same path; a
-// different path requires releasing all instances and their integrations first.
-// Mappings stay cached until the path changes or the process exits.
 class Syzygy final {
     public:
         explicit Syzygy(const std::string& path);

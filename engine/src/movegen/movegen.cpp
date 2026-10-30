@@ -10,8 +10,8 @@ namespace chess {
 
 constexpr MoveGenerator::between_table_t MoveGenerator::create_squares_between() {
     between_table_t table {};
-    for (int start = 0; start < Square::Count; ++start) {
-        for (int target = 0; target < Square::Count; ++target) {
+    for (int start = 0; start < Square::Count; start++) {
+        for (int target = 0; target < Square::Count; target++) {
             table[start][target] = Square::bitboard(static_cast<square_t>(target));
 
             int rankDistance = Square::rank(target) - Square::rank(start);

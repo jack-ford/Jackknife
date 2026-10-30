@@ -16,13 +16,13 @@ int Search::pvs(chess::Board& board, int depth, int alpha, int beta, const NodeC
     int score = -Infinity;
 
     if (reduction > 0) {
-        ++m_statistics.lateReductions;
+        m_statistics.lateReductions++;
         score = search_child(depth - reduction, alpha, alpha + 1, false);
 
         if (m_stopped || score <= alpha)
             return score;
 
-        ++m_statistics.lateResearches;
+        m_statistics.lateResearches++;
     }
 
     if (!m_options.principalVariationSearch)
@@ -31,7 +31,7 @@ int Search::pvs(chess::Board& board, int depth, int alpha, int beta, const NodeC
     score = search_child(depth, alpha, alpha + 1, false);
 
     if (!m_stopped && score > alpha && score < beta) {
-        ++m_statistics.pvsResearches;
+        m_statistics.pvsResearches++;
         score = search_child(depth, alpha, beta, child.pvNode);
     }
 

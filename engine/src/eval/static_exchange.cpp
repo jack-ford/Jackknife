@@ -42,9 +42,10 @@ int ExchangePosition::score(move_t move, PieceColor color) {
     piece_t moving = 0;
     piece_t victim = 0;
 
-    for (piece_t piece = 2; piece < m_pieces.size(); ++piece) {
+    for (piece_t piece = 2; piece < m_pieces.size(); piece++) {
         if (m_pieces[piece] & Square::bitboard(from))
             moving = piece;
+        
         if (m_pieces[piece] & Square::bitboard(victimSquare))
             victim = piece;
     }

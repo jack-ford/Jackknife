@@ -76,24 +76,18 @@ struct Limits {
     uint64_t nodes = 0;
     std::chrono::milliseconds time {1000};
     std::chrono::milliseconds softTime {0};
-    // Empty means all legal root moves. Callers must supply legal moves from
-    // the root position; unknown entries are ignored defensively.
     std::vector<chess::move_t> searchMoves;
 
     void validate() const;
 };
 
-// Per-node search state passed from a parent to a child.
 struct NodeContext {
     int ply = 0;
     int extensions = 0;
     chess::square_t recaptureSquare = chess::Square::None;
     bool pvNode = false;
-    // Below a null move: repetition and fifty-move draws are not claimed.
     bool nullSearch = false;
-    // False inside null-move verification and singular searches.
     bool allowNull = true;
-    // Singular-extension verification searches every move except this one.
     chess::move_t excludedMove = 0;
 };
 
@@ -129,64 +123,85 @@ struct Result {
     std::vector<Variation> variations;
 };
 
+struct RootMove {
+    chess::move_t move;
+    int score = -Infinity;
+    uint64_t nodes = 0;
+};
+
 class Search final {
     public:
         explicit Search(std::size_t hashMegabytes = DefaultHashMegabytes, const Options& options = {});
+
         Result iterative_deepening(chess::Board board, const Limits& limits = {},
             std::stop_token stopToken = {}, const std::function<void(const Result&)>& onIteration = {});
+
         void clear();
         void set_integrations(Integrations integrations);
 
     private:
         bool should_stop();
         bool is_draw(const chess::Board& board, bool nullSearch);
+
         int aspiration_window(chess::Board& board, int depth, int center,
             const std::vector<chess::move_t>& excluded, chess::move_t preferred);
+
         int pvs(chess::Board& board, int depth, int alpha, int beta, const NodeContext& child,
             bool firstMove, int reduction);
+        void update_pv(int ply, chess::move_t move);
+
         int root_max(chess::Board& board, int depth, int alpha, int beta,
             const std::vector<chess::move_t>& excluded, chess::move_t preferred);
+
         int nega_max(chess::Board& board, int depth, int alpha, int beta, NodeContext node);
+
         std::optional<int> prob_cut(chess::Board& board, int depth, int beta, const NodeContext& node);
+
         int quiescence_search(chess::Board& board, int alpha, int beta, int ply, bool nullSearch);
         int quiet_score(const chess::Board& board, chess::move_t move, int ply) const;
-        void update_pv(int ply, chess::move_t move);
         void reward_quiet(const chess::Board& board, chess::move_t move, int depth, int ply,
             const chess::MoveList& quietMoves);
+
         void advance_history(const chess::Board& board, int ply, chess::move_t move);
         int history_score(const chess::Board& board, chess::move_t move, int ply) const;
+
         std::size_t continuation_index(const chess::Board& board, chess::move_t move, int ply) const;
         std::size_t pawn_index(const chess::Board& board, chess::move_t move) const;
+
         int capture_score(const chess::Board& board, chess::move_t move) const;
         void reward_capture(const chess::Board& board, chess::move_t move, int depth, const chess::MoveList& captures);
+
         int corrected_score(const chess::Board& board, int score) const;
         void update_correction(const chess::Board& board, int depth, int score, int staticScore);
+
         uint64_t context_key(const NodeContext& node) const;
         bool is_repetition_draw(const chess::Board& board) const;
+
         HashProbe probe_hash(const chess::Board& board, uint64_t context, int ply);
         void store_hash(const chess::Board& board, uint64_t context, chess::move_t move,
             int score, int staticScore, int depth, int ply, int originalAlpha, int beta);
+
         int futility_margin(int depth, bool quiet, int quality) const;
         int late_reduction(int depth, int searched, int quality, bool pvNode, bool improving,
             int evaluationDelta, bool quiet) const;
 
-        struct RootMove {
-            chess::move_t move;
-            int score = -Infinity;
-            uint64_t nodes = 0;
-        };
         std::vector<RootMove> m_rootMoves;
+
         int m_scoreVolatility = 0;
+
         TranspositionTable m_hash;
         Options m_options;
         Integrations m_integrations;
         Statistics m_statistics;
+
         std::array<int, MaxPly> m_staticScores {};
         std::array<std::array<int, chess::MaxMoves + 1>, MaxPly> m_reductions {};
         std::array<std::array<std::array<int, 64>, 64>, 2> m_history {};
         std::array<std::array<chess::move_t, 2>, MaxPly> m_killers {};
+
         std::vector<int> m_continuationHistory = std::vector<int>(ContinuationHistorySize);
         std::vector<int> m_pawnHistory = std::vector<int>(HistoryTableSize);
+
         std::array<std::array<std::array<int, 7>, 64>, 14> m_captureHistory {};
         std::array<std::array<chess::move_t, 64>, 14> m_counterMoves {};
         std::array<chess::move_t, MaxPly> m_previousMoves {};
@@ -195,10 +210,13 @@ class Search final {
             std::vector<int>(HistoryTableSize), std::vector<int>(HistoryTableSize)};
         std::array<std::array<chess::move_t, MaxPly>, MaxPly> m_pv {};
         std::array<int, MaxPly> m_pvLength {};
+
         chess::MoveGenerator m_generator;
         Limits m_limits;
+
         std::stop_token m_stopToken;
         std::chrono::steady_clock::time_point m_start;
+        
         uint64_t m_nodes = 0;
         int m_rootPly = 0;
         int m_selectiveDepth = 0;

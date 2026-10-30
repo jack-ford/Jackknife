@@ -26,14 +26,19 @@ class MoveGenerator {
         MoveList generate_moves(const Board& board, GenerationMode mode = GenerationMode::All, uint8_t pieceMask = AllPieces);
         void generate_moves(const Board& board, MoveList& moves, GenerationMode mode = GenerationMode::All, uint8_t pieceMask = AllPieces);
         MoveList generate_moves(const Board& board, bool capturesOnly);
+
         bool has_legal_moves(const Board& board, GenerationMode mode = GenerationMode::All, uint8_t pieceMask = AllPieces);
         bool is_legal(const Board& board, move_t move);
+
         bool is_en_passant_square_valid(const Board& board, square_t targetSquare);
 
         void set_promotion_mode(PromotionMode mode);
+
         bool in_check() const;
         bool in_double_check() const;
+
         bitboard_t opponent_attack_map() const;
+        
         // Excludes startSquare, includes targetSquare
         static bitboard_t squares_between(square_t startSquare, square_t targetSquare);
 
@@ -43,9 +48,11 @@ class MoveGenerator {
         static const between_table_t SquaresBetween;
 
         void initialize(const Board& board, GenerationMode mode, bool oneMoveOnly);
+
         void calculate_attack_data();
         bitboard_t calculate_pin_rays(bool orthogonal) const;
         void calculate_opponent_attack_map();
+        
         void generate_all_moves(MoveList& moves, uint8_t pieceMask);
         void generate_king_moves(MoveList& moves);
         void generate_castling_moves(MoveList& moves);
@@ -54,21 +61,30 @@ class MoveGenerator {
         void generate_sliding_moves(MoveList& moves, PieceType pieceType);
         void generate_promotions(MoveList& moves, square_t startSquare, square_t targetSquare);
         void generate_en_passant_moves(MoveList& moves, square_t targetSquare);
+
         bool is_en_passant_legal(square_t startSquare, square_t targetSquare) const;
+
         bool finished(const MoveList& moves) const;
+
         bitboard_t friendly_piece_board(PieceType type) const;
         bitboard_t enemy_piece_board(PieceType type) const;
 
         const Board* m_board = nullptr;
+
         uint64_t m_positionKey = 0;
         std::array<bitboard_t, 14> m_positionPieces {};
+
         GenerationMode m_generationMode = GenerationMode::All;
         PromotionMode m_promotionMode = PromotionMode::All;
+        
         bool m_oneMoveOnly = false;
+
         PieceColor m_friendlyColor = PieceColor::White;
         PieceColor m_opponentColor = PieceColor::Black;
         square_t m_friendlyKingSquare = Square::None;
+
         int m_checkCount = 0;
+
         bitboard_t m_checkRayBitmask = 0;
         bitboard_t m_orthogonalPinRays = 0;
         bitboard_t m_diagonalPinRays = 0;

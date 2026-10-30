@@ -71,7 +71,6 @@ inline constexpr int HashExactBonus = 4;
 inline constexpr uint64_t MixMultiplierOne = 0xbf58476d1ce4e5b9ULL;
 inline constexpr uint64_t MixMultiplierTwo = 0x94d049bb133111ebULL;
 inline constexpr uint64_t ExcludedMoveSeed = 0x9e3779b97f4a7c15ULL;
-// Near the fifty-move limit stored scores may ignore an imminent draw
 inline constexpr int HashCutoffFiftyLimit = 90;
 
 }

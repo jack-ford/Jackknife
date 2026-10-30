@@ -19,7 +19,6 @@ struct TimeBudget {
 TimeBudget allocate_time(const Clock& clock);
 std::chrono::milliseconds stable_budget(TimeBudget budget, int stableIterations, int scoreDrop);
 
-// Own one controller per search worker. Search and configuration are synchronous.
 class Controller final {
     public:
         explicit Controller(std::size_t hashMegabytes = DefaultHashMegabytes, const Options& options = {});

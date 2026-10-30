@@ -16,8 +16,10 @@ class ExchangePosition {
 
     private:
         chess::bitboard_t attackers(chess::square_t square, chess::PieceColor color) const;
+
         void remove(chess::piece_t piece, chess::square_t square);
         void place(chess::piece_t piece, chess::square_t square);
+        
         std::array<chess::bitboard_t, 14> m_pieces;
         chess::bitboard_t m_occupied;
         std::array<chess::square_t, 2> m_kings;

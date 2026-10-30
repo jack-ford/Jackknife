@@ -15,6 +15,7 @@ inline constexpr int FeatureCount = 26 * 64 * 5 * 2;
 inline constexpr int ActivationScale = 256;
 inline constexpr int WeightScale = 64;
 inline constexpr int BiasScale = ActivationScale * WeightScale;
+
 inline constexpr std::array<uint8_t, 64> KingBuckets {
      0, 1, 2, 3, 4, 5, 6, 7,
      8, 8, 9,10,11,12,13,13,

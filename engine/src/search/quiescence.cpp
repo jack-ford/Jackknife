@@ -45,7 +45,7 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
 
     if (beta - alpha == 1 && probe.depth == 0 && board.fifty_move_counter() < HashCutoffFiftyLimit &&
         probe.can_cutoff(0, alpha, beta)) {
-        ++m_statistics.hashCutoffs;
+        m_statistics.hashCutoffs++;
         return probe.score;
     }
 
@@ -69,7 +69,7 @@ int Search::quiescence_search(Board& board, int alpha, int beta, int ply, bool n
     int legalMoveCount = 0;
     while (auto candidate = picker.next()) {
         move_t move = candidate->move;
-        ++legalMoveCount;
+        legalMoveCount++;
         bool canPrune = !inCheck && Move::type(move) != Move::Type::Promotion &&
             alpha > -MateThreshold && alpha < MateThreshold && board.fifty_move_counter() < 90;
 

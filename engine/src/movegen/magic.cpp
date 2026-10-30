@@ -70,7 +70,7 @@ mask_table_t Magic::create_masks(bool rook) {
 attack_table_t Magic::create_attack_tables(bool rook, const mask_table_t& masks) {
     attack_table_t tables;
 
-    for (int square = 0; square < Square::Count; ++square) {
+    for (int square = 0; square < Square::Count; square++) {
         bitboard_t magic = rook ? RookMagics[square] : BishopMagics[square];
 
         int shift = rook ? RookShifts[square] : BishopShifts[square];

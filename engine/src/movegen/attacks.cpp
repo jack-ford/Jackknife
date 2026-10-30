@@ -29,7 +29,7 @@ constexpr bitboard_t Attacks::create_leaper_attacks(square_t square,
 constexpr leaper_attack_table_t Attacks::create_knight_attack_table() {
     leaper_attack_table_t table {};
 
-    for (int square = 0; square < Square::Count; ++square) {
+    for (int square = 0; square < Square::Count; square++) {
         table[square] = create_leaper_attacks(
             static_cast<square_t>(square),
             KnightDirections
@@ -42,7 +42,7 @@ constexpr leaper_attack_table_t Attacks::create_knight_attack_table() {
 constexpr leaper_attack_table_t Attacks::create_king_attack_table() {
     leaper_attack_table_t table {};
 
-    for (int square = 0; square < Square::Count; ++square) {
+    for (int square = 0; square < Square::Count; square++) {
         table[square] = create_leaper_attacks(
             static_cast<square_t>(square),
             KingDirections
@@ -55,7 +55,7 @@ constexpr leaper_attack_table_t Attacks::create_king_attack_table() {
 constexpr pawn_attack_table_t Attacks::create_pawn_attack_table() {
     pawn_attack_table_t table {};
 
-    for (int square = 0; square < Square::Count; ++square) {
+    for (int square = 0; square < Square::Count; square++) {
         square_t index = static_cast<square_t>(square);
 
         table[square][color_index(PieceColor::White)] = create_leaper_attacks(index, WhitePawnAttackDirections);
@@ -69,8 +69,8 @@ constexpr pawn_attack_table_t Attacks::create_pawn_attack_table() {
 constexpr distance_table_t Attacks::create_orthogonal_distance_table() {
     distance_table_t table {};
 
-    for (int first = 0; first < Square::Count; ++first) {
-        for (int second = 0; second < Square::Count; ++second) {
+    for (int first = 0; first < Square::Count; first++) {
+        for (int second = 0; second < Square::Count; second++) {
             int rankDistance = Square::abs(Square::rank(first) - Square::rank(second));
 
             int fileDistance = Square::abs(Square::file(first) - Square::file(second));
@@ -85,8 +85,8 @@ constexpr distance_table_t Attacks::create_orthogonal_distance_table() {
 constexpr distance_table_t Attacks::create_king_distance_table() {
     distance_table_t table {};
 
-    for (int first = 0; first < Square::Count; ++first) {
-        for (int second = 0; second < Square::Count; ++second) {
+    for (int first = 0; first < Square::Count; first++) {
+        for (int second = 0; second < Square::Count; second++) {
             table[first][second] = static_cast<square_t>(Square::distance(
                 static_cast<square_t>(first),
                 static_cast<square_t>(second)

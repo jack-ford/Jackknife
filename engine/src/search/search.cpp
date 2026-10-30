@@ -14,8 +14,8 @@ void Limits::validate() const {
 }
 
 Search::Search(std::size_t hashMegabytes, const Options& options): m_hash(hashMegabytes), m_options(options) {
-    for (int depth = 1; depth < MaxPly; ++depth) {
-        for (int move = 1; move <= MaxMoves; ++move) {
+    for (int depth = 1; depth < MaxPly; depth++) {
+        for (int move = 1; move <= MaxMoves; move++) {
             m_reductions[depth][move] = static_cast<int>(
                 LateReductionBase +
                 std::log(static_cast<double>(depth)) * 
@@ -52,14 +52,15 @@ uint64_t Search::context_key(const NodeContext& node) const {
 }
 
 bool Search::is_repetition_draw(const Board& board) const {
-    // History entries are consecutive plies since the last irreversible or null move.
     auto history = board.repetition_position_history();
     int last = static_cast<int>(history.size()) - 1;
+
     int occurrences = 0;
     for (int distance = 2; distance <= last; distance += 2) {
         if (history[last - distance] != board.zobrist_key())
             continue;
-        // One repetition inside the search tree is enough; game history needs threefold.
+
+        // One repetition inside the search tree is enough
         if (board.ply_count() - distance > m_rootPly || ++occurrences == 2)
             return true;
     }
@@ -100,11 +101,13 @@ bool Search::should_stop() {
 bool Search::is_draw(const Board& board, bool nullSearch) {
     if (GameResultUtility::is_insufficient_material(board))
         return true;
+    
     if (nullSearch)
         return false;
+
     if (is_repetition_draw(board))
         return true;
-    // Checkmate delivered on the move that reaches the fifty-move limit takes precedence.
+
     return GameResultUtility::is_half_move_draw(board) &&
         (!board.is_in_check() || m_generator.has_legal_moves(board));
 }
@@ -160,7 +163,7 @@ int Search::root_max(Board& board, int depth, int alpha, int beta, const std::ve
         if (m_stopped)
             return 0;
 
-        ++searched;
+        searched++;
         rootMove.score = score;
         rootMove.nodes = m_nodes - startNodes;
 

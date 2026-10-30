@@ -337,31 +337,38 @@ void Board::load_position(const FenUtility::PositionInfo& positionInfo) {
     std::array<int, 2> pawnCounts {};
     std::array<int, 2> pieceCounts {};
     std::array<square_t, 2> kingSquares {};
+
     for (int index = 0; index < Square::Count; ++index) {
         piece_t piece = positionInfo.squares[index];
+
         if (Piece::is_empty(piece)) continue;
+
         if (piece < 2 || piece >= m_pieceBitboards.size())
             throw std::invalid_argument("Invalid piece code");
+
         int colorIndex = static_cast<int>(Piece::color(piece));
-        ++pieceCounts[colorIndex];
+        pieceCounts[colorIndex]++;
+
         if (Piece::type(piece) == PieceType::King) {
-            ++kingCounts[colorIndex];
+            kingCounts[colorIndex]++;
             kingSquares[colorIndex] = static_cast<square_t>(index);
         }
+
         if (Piece::type(piece) == PieceType::Pawn) {
-            ++pawnCounts[colorIndex];
+            pawnCounts[colorIndex]++;
             if (index < 8 || index >= 56)
                 throw std::invalid_argument("Pawn on a promotion rank");
         }
     }
-    for (int colorIndex = 0; colorIndex < 2; ++colorIndex) {
+
+    for (int colorIndex = 0; colorIndex < 2; colorIndex++) {
         if (kingCounts[colorIndex] != 1 || pawnCounts[colorIndex] > 8 || pieceCounts[colorIndex] > 16)
             throw std::invalid_argument("Invalid king, pawn, or piece count");
     }
+
     if (Square::distance(kingSquares[0], kingSquares[1]) <= 1)
         throw std::invalid_argument("Kings cannot occupy adjacent squares");
 
-    // Build off to the side: validation and allocation failures preserve this board.
     Board replacement(nullptr);
     replacement.load_validated_position(positionInfo);
     *this = std::move(replacement);
@@ -407,9 +414,11 @@ void Board::load_validated_position(const FenUtility::PositionInfo& positionInfo
         square_t targetSquare = Square::index(m_isWhiteToMove ? 5 : 2, positionInfo.epFile - 1);
         square_t capturedSquare = Square::ep_square(targetSquare);
         square_t originSquare = static_cast<square_t>(targetSquare + (m_isWhiteToMove ? 8 : -8));
+
         if (!Piece::is_empty(m_squares[targetSquare]) || !Piece::is_empty(m_squares[originSquare]) ||
             m_squares[capturedSquare] != Piece::create(PieceType::Pawn, opponent_color()))
             throw std::invalid_argument("Invalid en-passant target");
+
         m_currentGameState.enPassantSquare = targetSquare;
         update_en_passant_hash();
     }

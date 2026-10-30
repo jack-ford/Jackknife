@@ -13,13 +13,13 @@ int Search::aspiration_window(chess::Board& board, int depth, int center, const 
     int alpha = std::max(-Infinity, center - window);
     int beta = std::min(Infinity, center + window);
 
-    for (int retry = 0; ; ++retry) {
+    for (int retry = 0; ; retry++) {
         int score = root_max(board, depth, alpha, beta, excluded, preferred);
 
         if (m_stopped || (score > alpha && score < beta))
             return score;
 
-        ++m_statistics.aspirationResearches;
+        m_statistics.aspirationResearches++;
         if (retry >= AspirationRetries || std::abs(score) >= MateThreshold)
             return root_max(board, depth, -Infinity, Infinity, excluded, preferred);
 
