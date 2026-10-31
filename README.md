@@ -12,6 +12,8 @@
 \
 \
 **Jackknife** is built as a reusable engine library with two front ends: a standard UCI executable for use in any chess GUI, and its own SDL3 desktop GUI for playing and analysing against the engine.
+\
+
 
 ## Features
 
