@@ -164,7 +164,7 @@ void Application::handle_command(std::string_view line) {
         send("registration ok");
     else if (command == "ucinewgame") {
         stop_search(false);
-        m_search->clear();
+        m_controller->clear();
     }
     else if (command == "position")
         handle_position(arguments);
@@ -175,7 +175,7 @@ void Application::handle_command(std::string_view line) {
     else if (command == "ponderhit") {
         if (m_pondering) {
             stop_search(false);
-            start_search(m_ponderHitLimits, false);
+            start_search(m_ponderHitLimits, m_ponderHitClock, false);
         }
     }
     else if (command == "quit")
@@ -310,7 +310,7 @@ void Application::handle_setoption(std::string_view arguments) {
     };
 
     if (name == "clear hash")
-        m_search->clear();
+        m_controller->clear();
     else if (name == "hash") {
         int parsed = 0;
         if (!parse_integer(value, parsed) || parsed < 1 || parsed > static_cast<int>(search::MaxHashMegabytes))
@@ -468,9 +468,7 @@ void Application::handle_go(std::string_view arguments) {
         clock.increment = m_board.is_white_to_move() ? whiteIncrement : blackIncrement;
         clock.overhead = m_settings.moveOverhead;
         clock.movesToGo = movesToGo;
-        search::TimeBudget budget = search::allocate_time(clock);
-        command.limits.time = budget.hard;
-        command.limits.softTime = budget.soft;
+        command.clock = clock;
     }
 
     if (infinite) {
@@ -479,25 +477,30 @@ void Application::handle_go(std::string_view arguments) {
     }
 
     command.ponderHitLimits = command.limits;
+    command.ponderHitClock = command.clock;
     if (command.ponder) {
         command.limits.time = std::chrono::milliseconds {0};
         command.limits.softTime = std::chrono::milliseconds {0};
+        command.clock.reset();
     }
 
     m_ponderHitLimits = command.ponderHitLimits;
-    start_search(command.limits, command.ponder);
+    m_ponderHitClock = command.ponderHitClock;
+    start_search(command.limits, command.clock, command.ponder);
 }
 
-void Application::start_search(const search::Limits& limits, bool ponder) {
+void Application::start_search(const search::Limits& limits, const std::optional<search::Clock>& clock, bool ponder) {
     m_stopSource = std::stop_source {};
     m_emitBestMove = !ponder;
     m_pondering = ponder;
 
     chess::Board position = m_board;
-    m_worker = std::jthread([this, position = std::move(position), limits]() mutable {
+    m_worker = std::jthread([this, position = std::move(position), limits, clock]() mutable {
         try {
-            search::Result result = m_search->iterative_deepening(std::move(position), limits,
-                m_stopSource.get_token(), [this](const search::Result& iteration) { print_info(iteration); });
+            auto onIteration = [this](const search::Result& iteration) { print_info(iteration); };
+            search::Result result = clock ?
+                m_controller->search(std::move(position), *clock, limits, m_stopSource.get_token(), onIteration) :
+                m_controller->search(std::move(position), limits, m_stopSource.get_token(), onIteration);
 
             if (m_emitBestMove.load())
                 print_result(result);
@@ -557,7 +560,7 @@ void Application::print_result(const search::Result& result) {
 
 void Application::rebuild_search() {
     stop_search(false);
-    m_search = std::make_unique<search::Search>(m_settings.hashMegabytes, m_settings.searchOptions);
+    m_controller = std::make_unique<search::Controller>(m_settings.hashMegabytes, m_settings.searchOptions);
     refresh_integrations();
 }
 
@@ -572,7 +575,7 @@ void Application::refresh_integrations() {
             return book->probe(board, random());
         };
 
-    m_search->set_integrations(std::move(integrations));
+    m_controller->set_integrations(std::move(integrations));
 }
 
 void Application::configure_book() {
@@ -591,7 +594,7 @@ void Application::configure_book() {
 }
 
 void Application::configure_syzygy() {
-    m_search->set_integrations({});
+    m_controller->set_integrations({});
     m_syzygy.reset();
 
     if (!m_settings.syzygyPath.empty()) {
@@ -663,7 +666,7 @@ void Application::handle_bench(std::string_view arguments) {
     limits.multiPv = 1;
 
     auto start = std::chrono::steady_clock::now();
-    search::Result result = m_search->iterative_deepening(m_board, limits);
+    search::Result result = m_controller->search(m_board, limits);
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
 
     send("info string bench depth " + std::to_string(result.depth) + " nodes " + std::to_string(result.nodes) +

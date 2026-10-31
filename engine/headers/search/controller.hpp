@@ -24,6 +24,8 @@ class Controller final {
         explicit Controller(std::size_t hashMegabytes = DefaultHashMegabytes, const Options& options = {});
         Result search(chess::Board board, const Clock& clock, Limits limits = {},
             std::stop_token stopToken = {}, const std::function<void(const Result&)>& onIteration = {});
+        Result search(chess::Board board, const Limits& limits,
+            std::stop_token stopToken = {}, const std::function<void(const Result&)>& onIteration = {});
         void set_integrations(Integrations integrations);
         void clear();
 

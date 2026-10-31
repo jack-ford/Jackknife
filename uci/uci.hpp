@@ -7,12 +7,14 @@
 #include <iosfwd>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <thread>
 
 #include "core/board.hpp"
+#include "search/controller.hpp"
 #include "search/opening_book.hpp"
 #include "search/search.hpp"
 #include "search/syzygy.hpp"
@@ -44,7 +46,9 @@ class Application final {
 
         struct GoCommand {
             search::Limits limits;
+            std::optional<search::Clock> clock;
             search::Limits ponderHitLimits;
+            std::optional<search::Clock> ponderHitClock;
             bool ponder = false;
         };
 
@@ -54,7 +58,7 @@ class Application final {
         void handle_go(std::string_view arguments);
         void handle_perft(std::string_view arguments);
         void handle_bench(std::string_view arguments);
-        void start_search(const search::Limits& limits, bool ponder);
+        void start_search(const search::Limits& limits, const std::optional<search::Clock>& clock, bool ponder);
         void stop_search(bool emitBestMove);
         void rebuild_search();
         void refresh_integrations();
@@ -71,7 +75,7 @@ class Application final {
         Settings m_settings;
         std::string m_defaultBookFile;
         chess::Board m_board;
-        std::unique_ptr<search::Search> m_search;
+        std::unique_ptr<search::Controller> m_controller;
         std::shared_ptr<search::OpeningBook> m_book;
         std::shared_ptr<search::Syzygy> m_syzygy;
         std::jthread m_worker;
@@ -80,6 +84,7 @@ class Application final {
         bool m_debug = false;
         bool m_pondering = false;
         search::Limits m_ponderHitLimits;
+        std::optional<search::Clock> m_ponderHitClock;
         std::ostream* m_output = nullptr;
         std::mutex m_outputMutex;
 };

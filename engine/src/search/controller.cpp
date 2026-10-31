@@ -46,6 +46,11 @@ void Controller::set_integrations(Integrations integrations) {
 
 void Controller::clear() { m_search.clear(); }
 
+Result Controller::search(chess::Board board, const Limits& limits,
+    std::stop_token stopToken, const std::function<void(const Result&)>& onIteration) {
+    return m_search.iterative_deepening(std::move(board), limits, std::move(stopToken), onIteration);
+}
+
 Result Controller::search(chess::Board board, const Clock& clock, Limits limits,
     std::stop_token stopToken, const std::function<void(const Result&)>& onIteration) {
     limits.validate();
