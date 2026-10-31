@@ -14,6 +14,8 @@ enum class Font { Heading, Label, Button, ButtonStrong, Start, Text, Small, Coun
 class Text final {
     public:
         bool load(SDL_Renderer* renderer, const std::string& basePath, std::string& error);
+        void rescale();
+        bool loaded() const;
 
         float width(Font font, std::string_view text);
         float height(Font font) const;
@@ -28,6 +30,7 @@ class Text final {
 
         TTF_Text* get(Font font, std::string_view text);
 
+        SDL_Renderer* m_renderer = nullptr;
         TextEnginePtr m_engine;
         std::array<FontPtr, FontCount> m_fonts;
         std::array<std::unordered_map<std::string, TextPtr>, FontCount> m_cache;

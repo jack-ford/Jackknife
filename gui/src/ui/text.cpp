@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "ui/theme.hpp"
+#include "ui/viewport.hpp"
 
 namespace GUI {
 
@@ -34,10 +35,10 @@ std::string system_font_directory() {
     return std::string(windows != nullptr ? windows : "C:\\Windows") + "\\Fonts\\";
 }
 
-FontPtr open_font(const std::string& basePath, const FontSpec& spec) {
+FontPtr open_font(const std::string& basePath, const FontSpec& spec, float scale) {
     for (const char* file : spec.files) {
         for (const std::string& directory : {basePath + "data/fonts/", system_font_directory()}) {
-            FontPtr font(TTF_OpenFont((directory + file).c_str(), spec.size * Theme::Scale));
+            FontPtr font(TTF_OpenFont((directory + file).c_str(), spec.size * scale));
 
             if (font)
                 return font;
@@ -50,6 +51,7 @@ FontPtr open_font(const std::string& basePath, const FontSpec& spec) {
 }
 
 bool Text::load(SDL_Renderer* renderer, const std::string& basePath, std::string& error) {
+    m_renderer = renderer;
     m_engine.reset(TTF_CreateRendererTextEngine(renderer));
 
     if (!m_engine) {
@@ -58,7 +60,7 @@ bool Text::load(SDL_Renderer* renderer, const std::string& basePath, std::string
     }
 
     for (std::size_t index = 0; index < FontCount; index++) {
-        m_fonts[index] = open_font(basePath, FontSpecs[index]);
+        m_fonts[index] = open_font(basePath, FontSpecs[index], Viewport::scale(renderer));
 
         if (!m_fonts[index]) {
             error = "Could not load a font. Place Poppins or Arial in data/fonts.";
@@ -67,6 +69,19 @@ bool Text::load(SDL_Renderer* renderer, const std::string& basePath, std::string
     }
 
     return true;
+}
+
+bool Text::loaded() const {
+    return m_fonts.back() != nullptr;
+}
+
+void Text::rescale() {
+    float scale = Viewport::scale(m_renderer);
+
+    for (std::size_t index = 0; index < FontCount; index++) {
+        TTF_SetFontSize(m_fonts[index].get(), FontSpecs[index].size * scale);
+        m_cache[index].clear();
+    }
 }
 
 TTF_Text* Text::get(Font font, std::string_view text) {
@@ -94,11 +109,11 @@ float Text::width(Font font, std::string_view text) {
     int width = 0;
     int height = 0;
     TTF_GetTextSize(get(font, text), &width, &height);
-    return static_cast<float>(width) / Theme::Scale;
+    return static_cast<float>(width) / Viewport::scale(m_renderer);
 }
 
 float Text::height(Font font) const {
-    return static_cast<float>(TTF_GetFontHeight(m_fonts[static_cast<std::size_t>(font)].get())) / Theme::Scale;
+    return static_cast<float>(TTF_GetFontHeight(m_fonts[static_cast<std::size_t>(font)].get())) / Viewport::scale(m_renderer);
 }
 
 void Text::draw(Font font, std::string_view text, float x, float y, SDL_Color color) {
@@ -111,7 +126,8 @@ void Text::draw(Font font, std::string_view text, float x, float y, SDL_Color co
         return;
 
     TTF_SetTextColor(shaped, color.r, color.g, color.b, color.a);
-    TTF_DrawRendererText(shaped, std::round(x * Theme::Scale), std::round(y * Theme::Scale));
+    SDL_FPoint pixels = Viewport::to_pixels(m_renderer, SDL_FPoint {x, y});
+    TTF_DrawRendererText(shaped, std::round(pixels.x), std::round(pixels.y));
 }
 
 void Text::draw_right(Font font, std::string_view text, float right, float y, SDL_Color color) {

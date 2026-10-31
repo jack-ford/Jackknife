@@ -73,16 +73,16 @@ chess::square_t BoardView::square_at(SDL_FPoint point) const {
     if (column > 7 || row > 7)
         return chess::Square::None;
 
-    int file = m_flipped ? 7 - column : column;
-    int rank = m_flipped ? row : 7 - row;
+    int file = flipped() ? 7 - column : column;
+    int rank = flipped() ? row : 7 - row;
     return chess::Square::index(rank, file);
 }
 
 SDL_FRect BoardView::square_rect(chess::square_t square) const {
     int file = chess::Square::file(square);
     int rank = chess::Square::rank(square);
-    float column = static_cast<float>(m_flipped ? 7 - file : file);
-    float row = static_cast<float>(m_flipped ? rank : 7 - rank);
+    float column = static_cast<float>(flipped() ? 7 - file : file);
+    float row = static_cast<float>(flipped() ? rank : 7 - rank);
     float size = square_size();
 
     return {m_bounds.x + column * size, m_bounds.y + row * size, size, size};
@@ -142,8 +142,16 @@ void BoardView::flip() {
     m_flipped = !m_flipped;
 }
 
+void BoardView::reset_flip() {
+    m_flipped = false;
+}
+
+void BoardView::set_orientation(chess::PieceColor bottom) {
+    m_blackAtBottom = bottom == chess::PieceColor::Black;
+}
+
 bool BoardView::flipped() const {
-    return m_flipped;
+    return m_blackAtBottom != m_flipped;
 }
 
 void BoardView::commit(Game& game, chess::move_t move) {

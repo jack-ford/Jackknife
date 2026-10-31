@@ -4,9 +4,13 @@
 
 namespace GUI::Theme {
 
-inline constexpr float Scale = 1.5f;
-inline constexpr int WindowWidth = 1920;
+inline constexpr float DesignWidth = 1280.0f;
+inline constexpr float DesignHeight = 720.0f;
+inline constexpr float MinScale = 0.5f;
+inline constexpr int WindowWidth = 1980;
 inline constexpr int WindowHeight = 1080;
+inline constexpr int MinWindowWidth = 640;
+inline constexpr int MinWindowHeight = 360;
 
 inline constexpr SDL_Color Background {28, 28, 28, 255};
 inline constexpr SDL_Color Button {44, 44, 44, 255};

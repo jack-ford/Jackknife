@@ -136,6 +136,7 @@ if(CHESS_BUILD_GUI)
         gui/src/ui/draw.cpp
         gui/src/ui/stepper.cpp
         gui/src/ui/text.cpp
+        gui/src/ui/viewport.cpp
         gui/src/views/board_view.cpp
         gui/src/views/clocks.cpp
         gui/src/views/control_panel.cpp

@@ -32,6 +32,10 @@ class App final {
         static std::string title();
 
     private:
+        static bool SDLCALL on_event_watch(void* userdata, SDL_Event* event);
+
+        void fit_viewport();
+        chess::PieceColor bottom_color() const;
         SDL_FPoint to_design(float x, float y) const;
         void handle_event(const SDL_Event& event);
         void handle_key(SDL_Keycode key);
@@ -46,6 +50,9 @@ class App final {
         ControlPanel m_controls;
 
         SDL_FPoint m_mouse {};
+        int m_pixelWidth = 0;
+        int m_pixelHeight = 0;
+        bool m_watching = false;
         bool m_running = true;
 };
 

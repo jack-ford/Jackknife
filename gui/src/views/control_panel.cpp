@@ -71,6 +71,8 @@ void ControlPanel::release(SDL_FPoint point, Game& game, BoardView& board) {
     int incrementCount = static_cast<int>(IncrementSeconds.size());
     int maxThinkCount = static_cast<int>(MaxThinkMilliseconds.size());
 
+    Mode previous = settings.mode;
+
     if (m_buttons[PlayWhite].release(point))
         settings.mode = Mode::PlayWhite;
 
@@ -79,6 +81,9 @@ void ControlPanel::release(SDL_FPoint point, Game& game, BoardView& board) {
 
     if (m_buttons[TwoPlayer].release(point))
         settings.mode = Mode::TwoPlayer;
+
+    if (settings.mode != previous)
+        board.reset_flip();
 
     if (m_buttons[Book].release(point))
         settings.book = !settings.book;

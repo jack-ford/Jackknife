@@ -23,6 +23,8 @@ class BoardView final {
         void reset();
         void clear_selection();
         void flip();
+        void reset_flip();
+        void set_orientation(chess::PieceColor bottom);
         bool flipped() const;
 
         void render(SDL_Renderer* renderer, const Game& game) const;
@@ -54,6 +56,7 @@ class BoardView final {
         float m_spriteHeight = 0.0f;
         SDL_FRect m_bounds {};
         bool m_flipped = false;
+        bool m_blackAtBottom = false;
 
         chess::square_t m_selected = chess::Square::None;
         chess::MoveList m_selectedMoves;

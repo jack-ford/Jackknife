@@ -2,6 +2,7 @@
 
 #include "engine_info.hpp"
 #include "ui/theme.hpp"
+#include "ui/viewport.hpp"
 #include "views/clocks.hpp"
 #include "views/stats_panel.hpp"
 
@@ -28,6 +29,9 @@ bool SdlSession::start() {
 }
 
 App::~App() {
+    if (m_watching)
+        SDL_RemoveEventWatch(on_event_watch, this);
+
     m_game.stop();
 }
 
@@ -46,7 +50,7 @@ bool App::initialize(std::string& error) {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
 
-    if (!SDL_CreateWindowAndRenderer(title().c_str(), Theme::WindowWidth, Theme::WindowHeight, 0, &window, &renderer)) {
+    if (!SDL_CreateWindowAndRenderer(title().c_str(), Theme::WindowWidth, Theme::WindowHeight, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         error = std::string("Could not create the window: ") + SDL_GetError();
         return false;
     }
@@ -54,8 +58,10 @@ bool App::initialize(std::string& error) {
     m_window.reset(window);
     m_renderer.reset(renderer);
 
+    SDL_SetWindowMinimumSize(window, Theme::MinWindowWidth, Theme::MinWindowHeight);
     SDL_SetRenderVSync(renderer, 1);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    fit_viewport();
 
     const char* base = SDL_GetBasePath();
     std::string basePath = base != nullptr ? base : "";
@@ -68,6 +74,7 @@ bool App::initialize(std::string& error) {
 
     m_board.set_bounds(BoardBounds);
     m_game.load_book(basePath);
+    m_watching = SDL_AddEventWatch(on_event_watch, this);
     return true;
 }
 
@@ -84,13 +91,56 @@ void App::run() {
         if (m_game.update())
             m_board.clear_selection();
 
+        fit_viewport();
+        m_board.set_orientation(bottom_color());
         m_controls.update(m_game);
         render();
     }
 }
 
+bool SDLCALL App::on_event_watch(void* userdata, SDL_Event* event) {
+    if (event->type == SDL_EVENT_WINDOW_EXPOSED) {
+        App* app = static_cast<App*>(userdata);
+        app->fit_viewport();
+        app->render();
+    }
+
+    return true;
+}
+
+void App::fit_viewport() {
+    int width = 0;
+    int height = 0;
+    SDL_GetCurrentRenderOutputSize(m_renderer.get(), &width, &height);
+
+    if (width == m_pixelWidth && height == m_pixelHeight)
+        return;
+
+    float previous = Viewport::scale(m_renderer.get());
+
+    m_pixelWidth = width;
+    m_pixelHeight = height;
+    Viewport::fit(m_renderer.get(), width, height);
+
+    if (m_text.loaded() && Viewport::scale(m_renderer.get()) != previous)
+        m_text.rescale();
+}
+
+chess::PieceColor App::bottom_color() const {
+    switch (m_game.settings().mode) {
+        case Mode::PlayBlack:
+            return chess::PieceColor::Black;
+
+        case Mode::TwoPlayer:
+            return m_game.board().move_color();
+
+        default:
+            return chess::PieceColor::White;
+    }
+}
+
 SDL_FPoint App::to_design(float x, float y) const {
-    return {x / Theme::Scale, y / Theme::Scale};
+    return Viewport::to_design(m_renderer.get(), SDL_FPoint {x, y});
 }
 
 void App::handle_event(const SDL_Event& source) {

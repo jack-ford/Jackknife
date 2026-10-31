@@ -4,7 +4,6 @@
 
 namespace GUI::Draw {
 
-SDL_FRect scaled(const SDL_FRect& rect);
 bool contains(const SDL_FRect& rect, SDL_FPoint point);
 
 void fill_rect(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color color);
