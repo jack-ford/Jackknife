@@ -4,7 +4,7 @@
   <source media="(prefers-color-scheme: dark)"
           srcset="https://github.com/user-attachments/assets/70be2055-1800-41e3-9280-abd962a36667">
   <img src="https://github.com/user-attachments/assets/05ae7e96-177d-4331-a815-53a53ee720f6"
-       height="200" alt="Casanchess Logo">
+       height="200" alt="Jackknife Logo">
 </picture>
 
 </div>
