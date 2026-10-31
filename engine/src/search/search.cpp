@@ -60,8 +60,10 @@ bool Search::is_repetition_draw(const Board& board) const {
         if (history[last - distance] != board.zobrist_key())
             continue;
 
+        occurrences++;
+
         // One repetition inside the search tree is enough
-        if (board.ply_count() - distance > m_rootPly || ++occurrences == 2)
+        if (board.ply_count() - distance > m_rootPly || occurrences == 2)
             return true;
     }
     return false;

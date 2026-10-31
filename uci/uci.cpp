@@ -260,7 +260,9 @@ void Application::handle_position(std::string_view arguments) {
         if (lower(tokens[index]) != "moves")
             throw std::invalid_argument("unexpected position argument");
 
-        for (++index; index < tokens.size(); index++) {
+        index++;
+
+        for (; index < tokens.size(); index++) {
             auto move = chess::parse_coordinate_move(board, lower(tokens[index]));
             if (!move)
                 throw std::invalid_argument("illegal position move: " + tokens[index]);
@@ -402,7 +404,8 @@ void Application::handle_go(std::string_view arguments) {
     bool infinite = false;
 
     auto nextInteger = [&](std::size_t& index, auto& destination) {
-        if (++index >= tokens.size() || !parse_integer(tokens[index], destination))
+        index++;
+        if (index >= tokens.size() || !parse_integer(tokens[index], destination))
             throw std::invalid_argument("invalid go value");
     };
 

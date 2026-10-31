@@ -338,7 +338,7 @@ void Board::load_position(const FenUtility::PositionInfo& positionInfo) {
     std::array<int, 2> pieceCounts {};
     std::array<square_t, 2> kingSquares {};
 
-    for (int index = 0; index < Square::Count; ++index) {
+    for (int index = 0; index < Square::Count; index++) {
         piece_t piece = positionInfo.squares[index];
 
         if (Piece::is_empty(piece)) continue;

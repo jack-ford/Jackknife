@@ -59,8 +59,9 @@ class MovePicker final {
 
                             if (candidate.exchange >= 0)
                                 return candidate;
-
-                            m_moves[chess::MaxMoves - m_losingCount++] = candidate;
+                            
+                            m_losingCount++;
+                            m_moves[chess::MaxMoves - m_losingCount] = candidate;
                         }
 
                         m_stage = Stage::GenerateQuiet;
