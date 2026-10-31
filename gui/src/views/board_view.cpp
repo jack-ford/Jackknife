@@ -38,7 +38,7 @@ bool is_capture(const chess::Board& board, chess::move_t move) {
 }
 
 bool BoardView::load(SDL_Renderer* renderer, const std::string& basePath, std::string& error) {
-    std::string path = basePath + "data/chess_pieces.png";
+    std::string path = basePath + "data/assets/chess_pieces.png";
     m_sprites.reset(IMG_LoadTexture(renderer, path.c_str()));
 
     if (!m_sprites) {

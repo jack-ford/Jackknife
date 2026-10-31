@@ -1,5 +1,7 @@
 #include "app.hpp"
 
+#include <SDL3_image/SDL_image.h>
+
 #include "engine_info.hpp"
 #include "ui/theme.hpp"
 #include "ui/viewport.hpp"
@@ -65,6 +67,11 @@ bool App::initialize(std::string& error) {
 
     const char* base = SDL_GetBasePath();
     std::string basePath = base != nullptr ? base : "";
+
+    SurfacePtr icon(IMG_Load((basePath + "data/assets/logo-256.png").c_str()));
+
+    if (icon)
+        SDL_SetWindowIcon(window, icon.get());
 
     if (!m_text.load(renderer, basePath, error))
         return false;

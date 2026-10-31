@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Jackknife VERSION 2.1.0 LANGUAGES CXX)
+project(Jackknife VERSION 2.0.0 LANGUAGES CXX)
 
 set(CHESS_ENGINE_AUTHOR "Jack Ford")
 
@@ -118,8 +118,13 @@ function(copy_opening_book target)
     )
 endfunction()
 
+set(CHESS_ICON_RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/gui/src/jackknife.rc")
+
 add_executable(chess_uci uci/main.cpp)
 target_link_libraries(chess_uci PRIVATE chess_uci_lib)
+if(WIN32)
+    target_sources(chess_uci PRIVATE "${CHESS_ICON_RESOURCE}")
+endif()
 copy_opening_book(chess_uci)
 
 if(CHESS_BUILD_GUI)
@@ -143,6 +148,10 @@ if(CHESS_BUILD_GUI)
         gui/src/views/stats_panel.cpp
     )
 
+    if(WIN32)
+        target_sources(chess_gui PRIVATE "${CHESS_ICON_RESOURCE}")
+    endif()
+
     target_include_directories(chess_gui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/gui/headers")
     target_link_libraries(chess_gui PRIVATE chess_engine SDL3::SDL3 SDL3_image::SDL3_image SDL3_ttf::SDL3_ttf)
 
@@ -154,10 +163,11 @@ if(CHESS_BUILD_GUI)
 
     add_custom_command(TARGET chess_gui POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
-            "$<TARGET_FILE_DIR:chess_gui>/data"
+            "$<TARGET_FILE_DIR:chess_gui>/data/assets"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/data/chess_pieces.png"
-            "$<TARGET_FILE_DIR:chess_gui>/data/chess_pieces.png"
+            "${CMAKE_CURRENT_SOURCE_DIR}/data/assets/chess_pieces.png"
+            "${CMAKE_CURRENT_SOURCE_DIR}/data/assets/logo-256.png"
+            "$<TARGET_FILE_DIR:chess_gui>/data/assets"
     )
     copy_opening_book(chess_gui)
 endif()
