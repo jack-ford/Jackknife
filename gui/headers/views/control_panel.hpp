@@ -26,7 +26,7 @@ class ControlPanel final {
 
     private:
         enum ButtonId : std::size_t { PlayWhite, PlayBlack, TwoPlayer, Book, Flip, StartStop, ButtonCount };
-        enum StepperId : std::size_t { ClockStepper, IncrementStepper, LinesStepper, StepperCount };
+        enum StepperId : std::size_t { ClockStepper, IncrementStepper, MaxThinkStepper, LinesStepper, StepperCount };
 
         std::array<Button, ButtonCount> m_buttons;
         std::array<Stepper, StepperCount> m_steppers;

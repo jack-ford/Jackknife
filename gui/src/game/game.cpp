@@ -105,6 +105,11 @@ bool Game::update() {
     if (!m_engine.active() && engine_to_move())
         start_search();
 
+    Milliseconds maxThink(MaxThinkMilliseconds[m_settings.maxThinkIndex]);
+
+    if (m_engine.active() && SteadyClock::now() - m_searchStart >= maxThink)
+        m_engine.stop();
+
     if (m_engine.active()) {
         search::Result progress = m_engine.progress();
 
@@ -133,6 +138,7 @@ void Game::start_search() {
     limits.multiPv = m_settings.lines;
 
     m_resultColor = m_board.move_color();
+    m_searchStart = SteadyClock::now();
 
     try {
         m_engine.start(m_board, clock, limits);

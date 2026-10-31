@@ -21,9 +21,9 @@ constexpr float ModeHeight = 40.0f;
 constexpr float ModeY = 162.0f;
 constexpr float ModeSpacing = 83.0f;
 
-constexpr std::array<const char*, 5> RowLabels {"Clock", "Increment", "Lines", "Book", "Board"};
-constexpr std::array<float, 5> RowY {282.0f, 322.0f, 362.0f, 402.0f, 442.0f};
-constexpr std::array<float, 3> DividerY {106.0f, 222.0f, 494.0f};
+constexpr std::array<const char*, 6> RowLabels {"Clock", "Increment", "Max think", "Lines", "Book", "Board"};
+constexpr std::array<float, 6> RowY {282.0f, 322.0f, 362.0f, 402.0f, 442.0f, 482.0f};
+constexpr std::array<float, 3> DividerY {106.0f, 222.0f, 534.0f};
 
 SDL_FRect control_rect(std::size_t row) {
     return {ControlX, RowY[row] - 3.0f, ControlWidth, ControlHeight};
@@ -35,8 +35,8 @@ ControlPanel::ControlPanel() {
     m_buttons[PlayWhite].set_bounds({Left, ModeY, ModeWidth, ModeHeight});
     m_buttons[PlayBlack].set_bounds({Left + ModeSpacing, ModeY, ModeWidth, ModeHeight});
     m_buttons[TwoPlayer].set_bounds({Left + ModeSpacing * 2.0f, ModeY, ModeWidth, ModeHeight});
-    m_buttons[Book].set_bounds(control_rect(3));
-    m_buttons[Flip].set_bounds(control_rect(4));
+    m_buttons[Book].set_bounds(control_rect(4));
+    m_buttons[Flip].set_bounds(control_rect(5));
     m_buttons[StartStop].set_bounds({Left, 652.0f, Width, 48.0f});
 
     m_buttons[PlayWhite].set_label("White");
@@ -69,6 +69,7 @@ void ControlPanel::release(SDL_FPoint point, Game& game, BoardView& board) {
     Settings& settings = game.settings();
     int clockCount = static_cast<int>(ClockMinutes.size());
     int incrementCount = static_cast<int>(IncrementSeconds.size());
+    int maxThinkCount = static_cast<int>(MaxThinkMilliseconds.size());
 
     if (m_buttons[PlayWhite].release(point))
         settings.mode = Mode::PlayWhite;
@@ -90,6 +91,7 @@ void ControlPanel::release(SDL_FPoint point, Game& game, BoardView& board) {
 
     settings.clockIndex = std::clamp(settings.clockIndex + m_steppers[ClockStepper].release(point), 0, clockCount - 1);
     settings.incrementIndex = std::clamp(settings.incrementIndex + m_steppers[IncrementStepper].release(point), 0, incrementCount - 1);
+    settings.maxThinkIndex = std::clamp(settings.maxThinkIndex + m_steppers[MaxThinkStepper].release(point), 0, maxThinkCount - 1);
     settings.lines = std::clamp(settings.lines + m_steppers[LinesStepper].release(point), 1, MaxLines);
 }
 
@@ -120,6 +122,7 @@ void ControlPanel::update(const Game& game) {
 
     m_steppers[ClockStepper].set_value(std::to_string(ClockMinutes[settings.clockIndex]) + " min");
     m_steppers[IncrementStepper].set_value(std::to_string(IncrementSeconds[settings.incrementIndex]) + " s");
+    m_steppers[MaxThinkStepper].set_value(MaxThinkLabels[settings.maxThinkIndex]);
     m_steppers[LinesStepper].set_value(std::to_string(settings.lines));
 
     for (Stepper& stepper : m_steppers)
@@ -135,7 +138,7 @@ void ControlPanel::render(SDL_Renderer* renderer, Text& text, const Game& game, 
 
     text.draw(Font::Label, "Play As", Left, 124.0f, Theme::Text);
     text.draw(Font::Label, "Settings", Left, 240.0f, Theme::Text);
-    text.draw(Font::Label, "Status", Left, 512.0f, Theme::Text);
+    text.draw(Font::Label, "Status", Left, 552.0f, Theme::Text);
 
     for (std::size_t row = 0; row < RowLabels.size(); row++)
         text.draw(Font::Text, RowLabels[row], Left, RowY[row], Theme::DimText);
@@ -146,7 +149,7 @@ void ControlPanel::render(SDL_Renderer* renderer, Text& text, const Game& game, 
     for (const Stepper& stepper : m_steppers)
         stepper.render(renderer, text, mouse);
 
-    text.draw(Font::Text, game.status(), Left, 550.0f, Theme::DimText);
+    text.draw(Font::Text, game.status(), Left, 590.0f, Theme::DimText);
 }
 
 }

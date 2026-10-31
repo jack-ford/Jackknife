@@ -17,12 +17,15 @@ enum class Mode { PlayWhite, PlayBlack, TwoPlayer };
 
 inline constexpr std::array<int, 7> ClockMinutes {1, 3, 5, 10, 15, 30, 60};
 inline constexpr std::array<int, 6> IncrementSeconds {0, 1, 2, 3, 5, 10};
+inline constexpr std::array<int, 5> MaxThinkMilliseconds {250, 500, 1000, 2000, 5000};
+inline constexpr std::array<const char*, 5> MaxThinkLabels {"0.25 s", "0.5 s", "1 s", "2 s", "5 s"};
 inline constexpr int MaxLines = 3;
 
 struct Settings {
     Mode mode = Mode::PlayWhite;
     int clockIndex = 2;
     int incrementIndex = 3;
+    int maxThinkIndex = 2;
     int lines = 1;
     bool book = true;
 };
@@ -76,6 +79,7 @@ class Game final {
 
         std::array<std::chrono::milliseconds, 2> m_remaining {};
         std::chrono::steady_clock::time_point m_turnStart;
+        std::chrono::steady_clock::time_point m_searchStart;
 
         search::Result m_result;
         chess::PieceColor m_resultColor = chess::PieceColor::White;
