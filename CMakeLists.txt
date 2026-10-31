@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.24)
 
 project(Jackknife VERSION 2.1.0 LANGUAGES CXX)
 
+set(CHESS_ENGINE_AUTHOR "Jack Ford")
+
 option(CHESS_BUILD_GUI "Build the SDL3 desktop GUI" ON)
 option(CHESS_AVX2 "Build for AVX2-capable CPUs: AVX2 NNUE kernels and native bit-manipulation instructions" ON)
 option(CHESS_ENABLE_LTO "Use link-time optimization for Release builds when supported" ON)
@@ -67,9 +69,14 @@ add_library(chess_engine
     engine/headers/search/search.hpp
 )
 
+# Single source of truth for the engine name, version and author shared by every frontend
+set(CHESS_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(engine/headers/engine_info.hpp.in "${CHESS_GENERATED_DIR}/engine_info.hpp" @ONLY)
+
 target_include_directories(chess_engine
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/engine/headers"
+        "${CHESS_GENERATED_DIR}"
 )
 target_compile_features(chess_engine PUBLIC cxx_std_20)
 
@@ -118,12 +125,31 @@ copy_opening_book(chess_uci)
 if(CHESS_BUILD_GUI)
     find_package(SDL3 CONFIG REQUIRED)
     find_package(SDL3_image CONFIG REQUIRED)
+    find_package(SDL3_ttf CONFIG REQUIRED)
 
     add_executable(chess_gui WIN32
-        gui/main.cpp
+        gui/src/main.cpp
+        gui/src/app.cpp
+        gui/src/game/game.cpp
+        gui/src/game/engine_player.cpp
+        gui/src/ui/button.cpp
+        gui/src/ui/draw.cpp
+        gui/src/ui/stepper.cpp
+        gui/src/ui/text.cpp
+        gui/src/views/board_view.cpp
+        gui/src/views/clocks.cpp
+        gui/src/views/control_panel.cpp
+        gui/src/views/stats_panel.cpp
     )
 
-    target_link_libraries(chess_gui PRIVATE chess_engine SDL3::SDL3 SDL3_image::SDL3_image)
+    target_include_directories(chess_gui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/gui/headers")
+    target_link_libraries(chess_gui PRIVATE chess_engine SDL3::SDL3 SDL3_image::SDL3_image SDL3_ttf::SDL3_ttf)
+
+    if(MSVC)
+        target_compile_options(chess_gui PRIVATE /W4 /permissive- /wd4324)
+    else()
+        target_compile_options(chess_gui PRIVATE -Wall -Wextra)
+    endif()
 
     add_custom_command(TARGET chess_gui POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory

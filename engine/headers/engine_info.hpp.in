@@ -1,0 +1,12 @@
+#pragma once
+
+#include <string_view>
+
+namespace chess::EngineInfo {
+
+inline constexpr std::string_view Name = "@PROJECT_NAME@";
+inline constexpr std::string_view Version = "@PROJECT_VERSION@";
+inline constexpr std::string_view Author = "@CHESS_ENGINE_AUTHOR@";
+inline constexpr std::string_view FullName = "@PROJECT_NAME@ @PROJECT_VERSION@";
+
+}

@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "engine_info.hpp"
 #include "eval/evaluation.hpp"
 #include "search/controller.hpp"
 #include "utils/move_utility.hpp"
@@ -21,8 +22,8 @@
 namespace uci {
 namespace {
 
-constexpr std::string_view EngineName = "Jackknife 2.1.0";
-constexpr std::string_view EngineAuthor = "Jack Ford";
+constexpr std::string_view EngineName = chess::EngineInfo::FullName;
+constexpr std::string_view EngineAuthor = chess::EngineInfo::Author;
 
 std::string lower(std::string_view value) {
     std::string result(value);
