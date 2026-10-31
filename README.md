@@ -4,7 +4,7 @@
   <source media="(prefers-color-scheme: dark)"
           srcset="https://github.com/jack-ford/Jackknife/blob/v2/data/assets/banner.png">
   <img src="https://github.com/jack-ford/Jackknife/blob/v2/data/assets/banner.png"
-       height="200" alt="Jackknife Logo">
+       height="800" alt="Jackknife Logo">
 </picture>
 
 </div>
