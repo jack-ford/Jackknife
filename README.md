@@ -1,6 +1,14 @@
-# Jackknife
+<div align="center">
 
-UCI chess engine written in C++20 with NNUE evaluation.
+<picture>
+  <source media="(prefers-color-scheme: dark)"
+          srcset="https://github.com/user-attachments/assets/70be2055-1800-41e3-9280-abd962a36667">
+  <img src="https://github.com/user-attachments/assets/05ae7e96-177d-4331-a815-53a53ee720f6"
+       height="200" alt="Casanchess Logo">
+</picture>
+
+</div>
+
 
 Jackknife is built as a reusable engine library with two front ends: a standard UCI executable for use in any chess GUI, and its own SDL3 desktop GUI for playing and analysing against the engine.
 
