@@ -7,8 +7,8 @@ namespace GUI::Theme {
 inline constexpr float DesignWidth = 1280.0f;
 inline constexpr float DesignHeight = 720.0f;
 inline constexpr float MinScale = 0.5f;
-inline constexpr int WindowWidth = 1980;
-inline constexpr int WindowHeight = 1080;
+inline constexpr int WindowWidth = 2240;
+inline constexpr int WindowHeight = 1260;
 inline constexpr int MinWindowWidth = 640;
 inline constexpr int MinWindowHeight = 360;
 
@@ -39,7 +39,7 @@ inline constexpr float StartSize = 26.0f;
 
 inline constexpr float DragDistance = 5.0f / 88.0f;
 inline constexpr float LegalDotRadius = 0.13f;
-inline constexpr float CaptureInset = 0.06f;
+inline constexpr float CaptureRadius = 0.47f;
 inline constexpr float CaptureThickness = 0.08f;
 inline constexpr float PromotionInset = 8.0f / 104.0f;
 

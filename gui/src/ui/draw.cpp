@@ -1,5 +1,6 @@
 #include "ui/draw.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "ui/viewport.hpp"
@@ -36,6 +37,30 @@ void fill_circle(SDL_Renderer* renderer, SDL_FPoint center, float radius, SDL_Co
     for (int row = -extent; row <= extent; row++) {
         float width = std::sqrt(pixels * pixels - static_cast<float>(row * row));
         SDL_RenderLine(renderer, x - width, y + static_cast<float>(row), x + width, y + static_cast<float>(row));
+    }
+}
+
+void ring(SDL_Renderer* renderer, SDL_FPoint center, float radius, float thickness, SDL_Color color) {
+    set_color(renderer, color);
+
+    SDL_FPoint position = Viewport::to_pixels(renderer, center);
+    float outer = radius * Viewport::scale(renderer);
+    float inner = std::max(outer - thickness * Viewport::scale(renderer), 0.0f);
+    int extent = static_cast<int>(outer);
+
+    for (int row = -extent; row <= extent; row++) {
+        float offset = static_cast<float>(row);
+        float y = position.y + offset;
+        float outerWidth = std::sqrt(outer * outer - offset * offset);
+
+        if (std::abs(offset) >= inner) {
+            SDL_RenderLine(renderer, position.x - outerWidth, y, position.x + outerWidth, y);
+            continue;
+        }
+
+        float innerWidth = std::sqrt(inner * inner - offset * offset);
+        SDL_RenderLine(renderer, position.x - outerWidth, y, position.x - innerWidth, y);
+        SDL_RenderLine(renderer, position.x + innerWidth, y, position.x + outerWidth, y);
     }
 }
 

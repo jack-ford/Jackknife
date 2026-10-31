@@ -328,21 +328,12 @@ void BoardView::render_legal_moves(SDL_Renderer* renderer, const Game& game) con
 
         drawn |= mask;
         SDL_FRect rect = square_rect(square);
+        SDL_FPoint center = {rect.x + size / 2.0f, rect.y + size / 2.0f};
 
-        if (is_capture(game.board(), move)) {
-            float inset = size * Theme::CaptureInset;
-            float thickness = size * Theme::CaptureThickness;
-            float span = size - inset * 2.0f;
-
-            Draw::fill_rect(renderer, {rect.x + inset, rect.y + inset, span, thickness}, Theme::LegalMove);
-            Draw::fill_rect(renderer, {rect.x + inset, rect.y + size - inset - thickness, span, thickness}, Theme::LegalMove);
-            Draw::fill_rect(renderer, {rect.x + inset, rect.y + inset, thickness, span}, Theme::LegalMove);
-            Draw::fill_rect(renderer, {rect.x + size - inset - thickness, rect.y + inset, thickness, span}, Theme::LegalMove);
-        }
-        else {
-            SDL_FPoint center = {rect.x + size / 2.0f, rect.y + size / 2.0f};
+        if (is_capture(game.board(), move))
+            Draw::ring(renderer, center, size * Theme::CaptureRadius, size * Theme::CaptureThickness, Theme::LegalMove);
+        else
             Draw::fill_circle(renderer, center, size * Theme::LegalDotRadius, Theme::LegalMove);
-        }
     }
 }
 

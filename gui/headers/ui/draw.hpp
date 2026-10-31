@@ -8,6 +8,7 @@ bool contains(const SDL_FRect& rect, SDL_FPoint point);
 
 void fill_rect(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color color);
 void fill_circle(SDL_Renderer* renderer, SDL_FPoint center, float radius, SDL_Color color);
+void ring(SDL_Renderer* renderer, SDL_FPoint center, float radius, float thickness, SDL_Color color);
 void texture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& source, const SDL_FRect& destination);
 
 }
