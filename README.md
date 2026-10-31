@@ -2,8 +2,8 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)"
-          srcset="https://github.com/user-attachments/assets/70be2055-1800-41e3-9280-abd962a36667">
-  <img src="https://github.com/user-attachments/assets/05ae7e96-177d-4331-a815-53a53ee720f6"
+          srcset="https://github.com/jack-ford/Jackknife/blob/v2/data/assets/banner.png">
+  <img src="https://github.com/jack-ford/Jackknife/blob/v2/data/assets/banner.png"
        height="200" alt="Jackknife Logo">
 </picture>
 
